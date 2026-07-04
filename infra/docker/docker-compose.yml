@@ -1,0 +1,26 @@
+# Local dev only. Mirrors prod topology at small scale: one Postgres instance
+# with one schema per stateful service, Redis for caching/rate-limiting, and
+# LocalStack standing in for SQS/EventBridge.
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gusto
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: gusto
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  localstack:
+    image: localstack/localstack:3
+    environment:
+      SERVICES: sqs,eventbridge,sns
+    ports: ["4566:4566"]
+
+volumes:
+  pgdata:

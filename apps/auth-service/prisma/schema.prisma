@@ -1,0 +1,24 @@
+// auth-service owns this schema exclusively. No other service connects to it
+// directly -- everything goes through auth-service's API.
+generator client {
+  provider        = "prisma-client-js"
+  output          = "./generated/client"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("AUTH_DATABASE_URL")
+  schemas  = ["auth"]
+}
+
+model User {
+  id                String   @id @default(uuid())
+  prefProfile        Json     @map("pref_profile")
+  encryptedMcpToken String?  @map("encrypted_mcp_token")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+  @@schema("auth")
+}

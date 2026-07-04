@@ -1,0 +1,27 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "./generated/client"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("ORDER_EXECUTION_DATABASE_URL")
+  schemas  = ["order_execution"]
+}
+
+model Order {
+  id               String    @id @default(uuid()) @map("order_id")
+  userId           String    @map("user_id")
+  swiggyOrderRef   String    @unique @map("swiggy_order_ref")
+  status           String    // PENDING_CONFIRMATION | PLACED | OUT_FOR_DELIVERY | DELIVERED | FAILED
+  cart             Json
+  savingsAchieved  Decimal   @map("savings_achieved")
+  agentLogs        String?   @map("agent_logs")
+  placedAt         DateTime? @map("placed_at")
+  deliveredAt      DateTime? @map("delivered_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@map("orders")
+  @@schema("order_execution")
+}

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api-gateway: ['apps/api-gateway/**', 'packages/**']
+            auth-service: ['apps/auth-service/**', 'packages/**']
+            orchestrator-service: ['apps/orchestrator-service/**', 'packages/**']
+            coupon-optimization-service: ['apps/coupon-optimization-service/**', 'packages/**']
+            order-execution-service: ['apps/order-execution-service/**', 'packages/**']
+            escrow-service: ['apps/escrow-service/**', 'packages/**']
+            scheduler-service: ['apps/scheduler-service/**', 'packages/**']
+            notification-service: ['apps/notification-service/**', 'packages/**']
+            mcp-gateway-service: ['apps/mcp-gateway-service/**', 'packages/**']
+            ai-agent-service: ['apps/ai-agent-service/**']
+
+  build-and-test-node:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run lint test build --filter=...[origin/main]
+
+  build-and-test-ai-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install poetry && cd apps/ai-agent-service && poetry install
+      - run: cd apps/ai-agent-service && poetry run pytest

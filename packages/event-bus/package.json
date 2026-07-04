@@ -1,0 +1,11 @@
+{
+  "name": "@gusto/event-bus",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.620.0",
+    "@aws-sdk/client-eventbridge": "^3.620.0",
+    "@gusto/contracts": "workspace:*"
+  }
+}

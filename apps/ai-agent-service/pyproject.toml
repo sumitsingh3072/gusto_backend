@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "ai-agent-service"
+version = "0.1.0"
+description = "Gusto's only AI/LLM component -- stateless Scout semantic-matching microservice"
+packages = [{ include = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.112.0"
+uvicorn = { extras = ["standard"], version = "^0.30.5" }
+pydantic = "^2.8.2"
+langgraph = "^0.2.14"
+crewai = "^0.51.1"
+anthropic = "^0.34.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.2"
+httpx = "^0.27.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

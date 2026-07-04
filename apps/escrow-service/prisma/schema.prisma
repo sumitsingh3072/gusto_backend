@@ -1,0 +1,25 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "./generated/client"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("ESCROW_DATABASE_URL")
+  schemas  = ["escrow"]
+}
+
+model Subscription {
+  id              String   @id @default(uuid()) @map("sub_id")
+  userId          String   @unique @map("user_id")
+  totalDeposited  Decimal  @map("total_deposited")
+  currentBalance  Decimal  @map("current_balance")
+  daysLeft        Int      @map("days_left")
+  dailyAvgLimit   Decimal  @map("daily_avg_limit")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("subscriptions")
+  @@schema("escrow")
+}

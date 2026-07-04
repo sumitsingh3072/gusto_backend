@@ -1,0 +1,26 @@
+{
+  "name": "gusto-backend",
+  "private": true,
+  "packageManager": "pnpm@9.7.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "prisma:generate": "turbo run prisma:generate",
+    "prisma:migrate:dev": "turbo run prisma:migrate:dev",
+    "docker:up": "docker compose -f infra/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infra/docker/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.0",
+    "typescript": "^5.5.4",
+    "eslint": "^9.9.0",
+    "prettier": "^3.3.3"
+  }
+}

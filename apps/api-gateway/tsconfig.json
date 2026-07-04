@@ -1,0 +1,6 @@
+{
+  "extends": "@gusto/tsconfig/base.json",
+  "compilerOptions": {
+    "outDir": "./dist"
+  }
+}

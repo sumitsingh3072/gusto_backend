@@ -1,0 +1,26 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "./generated/client"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("SCHEDULER_DATABASE_URL")
+  schemas  = ["scheduler"]
+}
+
+// Per-user trigger windows so cohorts are staggered rather than firing on one
+// global clock tick, avoiding a thundering herd against Swiggy's MCP servers.
+model ScheduleConfig {
+  id            String   @id @default(uuid())
+  userId        String   @unique @map("user_id")
+  scoutTime     DateTime @map("scout_time")     // T-2h
+  notifyTime    DateTime @map("notify_time")    // T-1h
+  executeTime   DateTime @map("execute_time")   // T-30m
+  timezone      String   @default("Asia/Kolkata")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("schedule_config")
+  @@schema("scheduler")
+}

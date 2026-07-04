@@ -1,0 +1,23 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "./generated/client"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("NOTIFICATION_DATABASE_URL")
+  schemas  = ["notification"]
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String   // MENU_OF_THE_DAY | CONFIRM_PAYMENT | ORDER_STATUS
+  payload   Json
+  channel   String   // push | sms | email
+  sentAt    DateTime @default(now()) @map("sent_at")
+
+  @@map("notification_log")
+  @@schema("notification")
+}
