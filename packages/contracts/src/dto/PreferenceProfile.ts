@@ -1,6 +1,17 @@
-export interface PreferenceProfile {
-  diet: "veg" | "non-veg" | "eggetarian" | "vegan";
-  spiceLevel: 1 | 2 | 3 | 4 | 5;
-  cuisineFavorites: string[];
-  nutritionTags?: string[]; // e.g. "high-protein", "low-carb"
-}
+import { z } from "zod";
+
+export const PreferenceProfileSchema = z.object({
+  diet: z.enum(["veg", "non-veg", "eggetarian", "vegan"]),
+  spiceLevel: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+  ]),
+  cuisineFavorites: z.array(z.string()),
+  nutritionTags: z.array(z.string()).optional(),
+});
+
+export type PreferenceProfile = z.infer<typeof PreferenceProfileSchema>;
+

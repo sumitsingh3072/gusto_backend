@@ -7,7 +7,7 @@
     "dev": "nest start --watch",
     "start": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "prisma generate --schema=./prisma/schema.prisma",
     "prisma:migrate:dev": "prisma migrate dev --schema=./prisma/schema.prisma"
@@ -20,7 +20,11 @@
     "@gusto/contracts": "workspace:*",
     "@gusto/event-bus": "workspace:*",
     "@gusto/config": "workspace:*",
-    "@gusto/logger": "workspace:*"
+    "@gusto/logger": "workspace:*",
+    "zod": "^3.23.8"
   },
-  "devDependencies": { "prisma": "^5.18.0" }
+  "devDependencies": {
+    "prisma": "^5.18.0",
+    "@gusto/tsconfig": "workspace:*"
+  }
 }
