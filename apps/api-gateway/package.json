@@ -17,6 +17,10 @@
     "@gusto/auth-middleware": "workspace:*",
     "@gusto/config": "workspace:*",
     "@gusto/logger": "workspace:*",
-    "http-proxy-middleware": "^3.0.0"
+    "http-proxy-middleware": "^3.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@gusto/tsconfig": "workspace:*"
   }
 }

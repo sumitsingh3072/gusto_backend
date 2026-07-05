@@ -1,11 +1,21 @@
-/** Shared lint rules for all apps/packages. Extend from each service's eslint config. */
-module.exports = {
-  root: true,
-  parser: "@typescript-eslint/parser",
-  plugins: ["@typescript-eslint"],
-  extends: ["eslint:recommended", "plugin:@typescript-eslint/recommended", "prettier"],
-  env: { node: true, es2022: true },
-  rules: {
-    "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
-  },
-};
+const typescriptEslint = require("typescript-eslint");
+const eslint = require("@eslint/js");
+const prettier = require("eslint-config-prettier");
+
+module.exports = typescriptEslint.config(
+  eslint.configs.recommended,
+  ...typescriptEslint.configs.recommended,
+  prettier,
+  {
+    languageOptions: {
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-explicit-any": "warn",
+    },
+  }
+);

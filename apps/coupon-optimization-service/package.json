@@ -18,6 +18,10 @@
     "@gusto/event-bus": "workspace:*",
     "@gusto/config": "workspace:*",
     "@gusto/logger": "workspace:*",
-    "@gusto/mcp-client-sdk": "workspace:*"
+    "@gusto/mcp-client-sdk": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@gusto/tsconfig": "workspace:*"
   }
 }

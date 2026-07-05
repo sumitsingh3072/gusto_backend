@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "main": "src/index.ts",
+  "scripts": {
+    "lint": "eslint \"src/**/*.ts\""
+  },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.620.0",
     "@aws-sdk/client-eventbridge": "^3.620.0",

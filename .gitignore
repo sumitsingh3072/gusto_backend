@@ -10,3 +10,4 @@ coverage/
 apps/*/prisma/generated/
 apps/ai-agent-service/.venv/
 apps/ai-agent-service/__pycache__/
+prompting_docs/

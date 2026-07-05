@@ -20,7 +20,11 @@
     "@gusto/contracts": "workspace:*",
     "@gusto/event-bus": "workspace:*",
     "@gusto/config": "workspace:*",
-    "@gusto/logger": "workspace:*"
+    "@gusto/logger": "workspace:*",
+    "zod": "^3.23.8"
   },
-  "devDependencies": { "prisma": "^5.18.0" }
+  "devDependencies": {
+    "prisma": "^5.18.0",
+    "@gusto/tsconfig": "workspace:*"
+  }
 }

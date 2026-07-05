@@ -1,11 +1,11 @@
-/**
- * Emitted by the owning service and consumed by any interested downstream
- * service via the shared event bus (SQS/EventBridge). Keep payloads minimal —
- * an event should carry an ID and just enough context to act on it, not a
- * full denormalized snapshot of another service's data.
- */
-export interface MealSkippedEvent {
-  eventId: string;
-  occurredAt: string; // ISO-8601
-  userId: string;
-}
+import { z } from "zod";
+
+export const MealSkippedEventSchema = z.object({
+  eventId: z.string().uuid(),
+  occurredAt: z.string().datetime(),
+  userId: z.string(),
+  reason: z.string().optional(),
+});
+
+export type MealSkippedEvent = z.infer<typeof MealSkippedEventSchema>;
+

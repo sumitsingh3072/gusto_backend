@@ -22,7 +22,11 @@
     "@gusto/config": "workspace:*",
     "@gusto/logger": "workspace:*",
     "@gusto/mcp-client-sdk": "workspace:*",
-    "axios": "^1.7.4"
+    "axios": "^1.7.4",
+    "zod": "^3.23.8"
   },
-  "devDependencies": { "prisma": "^5.18.0" }
+  "devDependencies": {
+    "prisma": "^5.18.0",
+    "@gusto/tsconfig": "workspace:*"
+  }
 }

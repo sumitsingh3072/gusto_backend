@@ -21,6 +21,9 @@
     "turbo": "^2.1.0",
     "typescript": "^5.5.4",
     "eslint": "^9.9.0",
-    "prettier": "^3.3.3"
+    "prettier": "^3.3.3",
+    "typescript-eslint": "^8.24.0",
+    "eslint-config-prettier": "^9.1.0",
+    "@nestjs/cli": "^10.4.5"
   }
 }
