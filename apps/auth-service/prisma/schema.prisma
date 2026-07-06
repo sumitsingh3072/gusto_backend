@@ -13,12 +13,36 @@ datasource db {
 }
 
 model User {
-  id                String   @id @default(uuid())
-  prefProfile        Json     @map("pref_profile")
-  encryptedMcpToken String?  @map("encrypted_mcp_token")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                String    @id @default(uuid())
+  prefProfile       Json      @map("pref_profile")
+  encryptedMcpToken String?   @map("encrypted_mcp_token")
+  // Swiggy access tokens live 5 days and are NOT refreshable in v1.0 -- see
+  // https://mcp.swiggy.com/builders/docs/start/enterprise/delegated-auth/#token-lifecycle
+  // Tracking expiry lets us proactively trigger re-authorization instead of
+  // waiting for a 401 from mcp-gateway-service.
+  mcpTokenExpiresAt DateTime? @map("mcp_token_expires_at")
+  mcpTokenScope     String?   @map("mcp_token_scope")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   @@map("users")
+  @@schema("auth")
+}
+
+/// Short-lived server-side PKCE session, bridging POST /auth/login/start and
+/// POST /auth/login/callback. Keyed by the CSRF `state` value we hand back to
+/// the caller; the `codeVerifier` never leaves this table, matching the PKCE
+/// threat model (only the party that generated the verifier may redeem it).
+/// Rows are deleted immediately after a successful exchange; anything left
+/// over past `expiresAt` is swept opportunistically on the next login start.
+model PendingAuthSession {
+  state        String   @id
+  userId       String   @map("user_id")
+  codeVerifier String   @map("code_verifier")
+  redirectUri  String   @map("redirect_uri")
+  createdAt    DateTime @default(now()) @map("created_at")
+  expiresAt    DateTime @map("expires_at")
+
+  @@map("pending_auth_sessions")
   @@schema("auth")
 }

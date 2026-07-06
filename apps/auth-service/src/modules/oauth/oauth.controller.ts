@@ -2,6 +2,7 @@ import { Body, Controller, Post } from "@nestjs/common";
 import { OAuthService } from "./oauth.service";
 import { StartLoginDto } from "./dto/start-login.dto";
 import { LoginCallbackDto } from "./dto/login-callback.dto";
+import { RefreshDto } from "./dto/refresh.dto";
 
 @Controller("auth")
 export class OAuthController {
@@ -19,9 +20,11 @@ export class OAuthController {
     return this.oauthService.exchangeCodeForToken(dto);
   }
 
-  // POST /auth/token/refresh
+  // POST /auth/token/refresh -- check/renew the linked Swiggy session.
+  // Swiggy does not issue refresh tokens (v1.0), so this may return a fresh
+  // authorization URL instead of a token -- see OAuthService.refresh().
   @Post("token/refresh")
-  refresh(@Body() body: { refreshToken: string }) {
-    return this.oauthService.refresh(body.refreshToken);
+  refresh(@Body() dto: RefreshDto) {
+    return this.oauthService.refresh(dto);
   }
 }
