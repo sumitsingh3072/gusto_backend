@@ -11,7 +11,7 @@
     },
     "lint": {},
     "test": {
-      "dependsOn": ["prisma:generate"]
+      "dependsOn": ["^build", "prisma:generate"]
     },
     "test:e2e": {
       "dependsOn": ["build"]

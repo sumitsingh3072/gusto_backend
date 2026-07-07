@@ -8,7 +8,7 @@ export interface EventEnvelope<T = unknown> {
 export class EventPublisher {
   private readonly client: EventBridgeClient;
 
-  constructor(private readonly busEndpoint: string, private readonly source: string) {
+  constructor(busEndpoint: string, private readonly source: string) {
     const isLocal = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test" || !process.env.NODE_ENV;
     const region = process.env.EVENT_BUS_REGION || "ap-south-1";
 
