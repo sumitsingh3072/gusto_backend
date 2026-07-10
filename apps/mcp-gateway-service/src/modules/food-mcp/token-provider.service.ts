@@ -5,6 +5,7 @@ import { env } from "../../config/configuration";
 @Injectable()
 export class TokenProviderService {
   // Simple in-memory cache: userId -> { token, expiresAt }
+  // We use 30s TTL per user to avoid hitting auth-service on every single MCP tool call.
   private cache = new Map<string, { token: string; expiresAt: number }>();
   private readonly CACHE_TTL_MS = 30 * 1000;
 
@@ -30,6 +31,7 @@ export class TokenProviderService {
 
       return token;
     } catch (error) {
+      // In production, we'd log this properly
       throw new InternalServerErrorException("Failed to retrieve MCP token from Auth Service");
     }
   }

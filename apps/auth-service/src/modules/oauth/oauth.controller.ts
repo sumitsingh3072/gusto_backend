@@ -3,6 +3,7 @@ import { OAuthService } from "./oauth.service";
 import { StartLoginDto } from "./dto/start-login.dto";
 import { LoginCallbackDto } from "./dto/login-callback.dto";
 import { RefreshDto } from "./dto/refresh.dto";
+import { GetInternalTokenDto } from "./dto/get-internal-token.dto";
 
 @Controller("auth")
 export class OAuthController {
@@ -26,5 +27,11 @@ export class OAuthController {
   @Post("token/refresh")
   refresh(@Body() dto: RefreshDto) {
     return this.oauthService.refresh(dto);
+  }
+
+  // POST /auth/internal/token -- get decrypted Swiggy token for internal use
+  @Post("internal/token")
+  getInternalToken(@Body() dto: GetInternalTokenDto) {
+    return this.oauthService.getDecryptedMcpToken(dto);
   }
 }

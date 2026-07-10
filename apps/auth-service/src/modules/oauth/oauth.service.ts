@@ -7,6 +7,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { StartLoginDto } from "./dto/start-login.dto";
 import { LoginCallbackDto } from "./dto/login-callback.dto";
 import { RefreshDto } from "./dto/refresh.dto";
+import { GetInternalTokenDto } from "./dto/get-internal-token.dto";
 import { UserAuthenticatedPublisher } from "../../events/publishers/user-authenticated.publisher";
 import { EventPublisher } from "@gusto/event-bus";
 import { env } from "../../config/configuration";
@@ -151,6 +152,21 @@ export class OAuthService {
     // https://mcp.swiggy.com/builders/docs/start/enterprise/delegated-auth/
     const challenge = await this.startPkceFlow({ userId: dto.userId });
     return { ...challenge, status: "reauthentication_required" };
+  }
+
+  async getDecryptedMcpToken(dto: GetInternalTokenDto): Promise<{ token: string }> {
+    const user = await this.prisma.user.findUnique({ where: { id: dto.userId } });
+
+    if (!user || !user.encryptedMcpToken || !user.mcpTokenExpiresAt) {
+      throw new UnauthorizedException("User does not have an active Swiggy MCP token");
+    }
+
+    if (user.mcpTokenExpiresAt.getTime() < Date.now()) {
+      throw new UnauthorizedException("Swiggy MCP token has expired");
+    }
+
+    const decryptedToken = this.tokenVault.decrypt(user.encryptedMcpToken);
+    return { token: decryptedToken };
   }
 
   private buildAuthorizationUrl(codeChallenge: string, state: string): string {

@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post } from "@nestjs/common";
+import { Body, Controller, Param, Post, Headers, HttpException, HttpStatus } from "@nestjs/common";
 import { FoodMcpClient } from "./food-mcp.client";
 
 /**
@@ -13,7 +13,14 @@ export class FoodMcpController {
   constructor(private readonly client: FoodMcpClient) {}
 
   @Post(":tool")
-  call(@Param("tool") tool: string, @Body() input: Record<string, unknown>) {
-    return this.client.callTool(tool, input);
+  call(
+    @Param("tool") tool: string, 
+    @Body() input: Record<string, unknown>,
+    @Headers("x-user-id") userId: string
+  ) {
+    if (!userId) {
+      throw new HttpException("x-user-id header is required", HttpStatus.BAD_REQUEST);
+    }
+    return this.client.callTool(tool, input, userId);
   }
 }
