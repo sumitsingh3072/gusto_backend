@@ -8,18 +8,34 @@ import axios from "axios";
  * so every caller talks to the Gateway through the same typed surface instead of
  * hand-rolling HTTP calls.
  */
+export interface McpToolResponse<T = any> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: {
+    message: string;
+    code?: string;
+  };
+}
+
 export class McpGatewayClient {
   constructor(private readonly baseUrl: string) {}
 
-  food(tool: string, input: Record<string, unknown>) {
-    return axios.post(`${this.baseUrl}/mcp/food/${tool}`, input).then((r) => r.data);
+  food<T = any>(tool: string, input: Record<string, unknown>, userId: string): Promise<McpToolResponse<T>> {
+    return axios.post(`${this.baseUrl}/mcp/food/${tool}`, input, {
+      headers: { "x-user-id": userId },
+    }).then((r) => r.data);
   }
 
-  instamart(tool: string, input: Record<string, unknown>) {
-    return axios.post(`${this.baseUrl}/mcp/instamart/${tool}`, input).then((r) => r.data);
+  instamart<T = any>(tool: string, input: Record<string, unknown>, userId: string): Promise<McpToolResponse<T>> {
+    return axios.post(`${this.baseUrl}/mcp/instamart/${tool}`, input, {
+      headers: { "x-user-id": userId },
+    }).then((r) => r.data);
   }
 
-  dineout(tool: string, input: Record<string, unknown>) {
-    return axios.post(`${this.baseUrl}/mcp/dineout/${tool}`, input).then((r) => r.data);
+  dineout<T = any>(tool: string, input: Record<string, unknown>, userId: string): Promise<McpToolResponse<T>> {
+    return axios.post(`${this.baseUrl}/mcp/dineout/${tool}`, input, {
+      headers: { "x-user-id": userId },
+    }).then((r) => r.data);
   }
 }

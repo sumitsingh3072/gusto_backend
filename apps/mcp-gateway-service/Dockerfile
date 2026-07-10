@@ -1,15 +1,14 @@
 FROM node:20-alpine AS build
 WORKDIR /app
+RUN corepack enable
 COPY . .
-RUN corepack enable && pnpm install --frozen-lockfile --filter=mcp-gateway-service...
-RUN pnpm --filter=mcp-gateway-service run prisma:generate --if-present
+RUN pnpm install --frozen-lockfile
 RUN pnpm --filter=mcp-gateway-service run build
+RUN pnpm deploy --filter=mcp-gateway-service --prod /prod/mcp-gateway-service
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/apps/mcp-gateway-service/dist ./dist
-COPY --from=build /app/apps/mcp-gateway-service/node_modules ./node_modules
-COPY --from=build /app/apps/mcp-gateway-service/package.json ./package.json
+COPY --from=build /prod/mcp-gateway-service ./
 EXPOSE 3008
 CMD ["node", "dist/main.js"]
