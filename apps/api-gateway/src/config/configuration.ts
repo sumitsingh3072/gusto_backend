@@ -8,6 +8,9 @@ import { baseEnvSchema } from "@gusto/config";
  */
 export const envSchema = baseEnvSchema.extend({
   PORT: z.coerce.number().default(3000),
+  AUTH_SERVICE_URL: z.string().url(),
+  JWT_SECRET: z.string().min(16),
+  CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:5173"),
 });
 
 export const env = envSchema.parse(process.env);
