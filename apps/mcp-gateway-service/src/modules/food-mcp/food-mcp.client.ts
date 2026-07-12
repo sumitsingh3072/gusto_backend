@@ -21,11 +21,10 @@ export class FoodMcpClient {
   ) {}
 
   async callTool(tool: string, args: Record<string, unknown>, userId: string) {
-    const isReadTool = !["update_food_cart", "flush_food_cart", "apply_food_coupon", "place_food_order", "report_error"].includes(tool);
-    
-    // Cache-through for read-only tools
+    // Cache-through for read-only Discover tools
+    const isCacheableDiscoverTool = ["search_restaurants", "search_menu", "get_restaurant_menu"].includes(tool);
     let cacheKey: string | null = null;
-    if (isReadTool) {
+    if (isCacheableDiscoverTool) {
       const argsHash = createHash("sha256").update(JSON.stringify(args || {})).digest("hex");
       cacheKey = `mcp:food:${tool}:${argsHash}`;
       const cached = await this.cache.get<any>(cacheKey);
@@ -47,7 +46,7 @@ export class FoodMcpClient {
     };
 
     let attempt = 0;
-    const maxAttempts = NON_IDEMPOTENT_TOOLS.has(tool) ? 1 : 4;
+    const maxAttempts = NON_IDEMPOTENT_TOOLS.has(tool) ? 1 : 5;
 
     while (true) {
       try {
@@ -67,7 +66,7 @@ export class FoodMcpClient {
         // JSON-RPC level might also return error, but Swiggy MCP wraps it in result if success
         const result = response.data;
         
-        if (isReadTool && cacheKey && result && result.success) {
+        if (isCacheableDiscoverTool && cacheKey && result && result.success) {
           // low-churn data cache for 5 mins
           await this.cache.set(cacheKey, result, 300);
         }
@@ -79,7 +78,7 @@ export class FoodMcpClient {
            this.handleFinalError(error);
         }
         
-        if (!this.isRetryable(error)) {
+        if (!this.isRetryable(error, attempt)) {
            this.handleFinalError(error);
         }
 
@@ -90,11 +89,23 @@ export class FoodMcpClient {
     }
   }
 
-  private isRetryable(error: any): boolean {
+  private isRetryable(error: any, attempt: number): boolean {
     const status = error?.response?.status;
-    if (status && status >= 500 && status < 600) return true;
-    const code = error?.response?.data?.error?.code;
-    return ["UPSTREAM_TIMEOUT", "UPSTREAM_ERROR", "INTERNAL_ERROR"].includes(code);
+    const message = error?.response?.data?.error?.message || "";
+
+    if (status === 401 || error?.response?.data?.error?.code === -32001) return false;
+    if (status === 400 || message.startsWith("Invalid ") || message.startsWith("Missing ")) return false;
+    
+    if (status === 504 || message.includes("timeout")) return true;
+    if (status === 502 || status === 503) return true;
+    
+    if (status === 200 && error?.response?.data?.success === false) return false;
+    
+    if (status === 500 || error?.response?.data?.error?.code === -32603) {
+      return attempt === 1; // Retry ONCE
+    }
+
+    return false;
   }
 
   private handleFinalError(error: any): never {
