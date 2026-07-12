@@ -27,6 +27,30 @@ export class WorkflowService {
     private readonly stateMachine: WorkflowStateMachine,
   ) {}
 
+  async analyzeWithScout(userId: string, subscriptionId: string, menuItems: any[]) {
+    // 1. Fetch Subscription from escrow to get budget state
+    const subscription = await this.escrow.getSubscription(subscriptionId);
+    
+    // 2. Fetch User Profile
+    // (mock profile for scaffold - would come from user-service)
+    const profile = { diet: "veg", spiceLevel: 3, cuisineFavorites: [] };
+
+    // 3. Build weeklyBudget DTO
+    const weeklyBudget = {
+      totalAmount: subscription.totalAmount,
+      spentSoFar: subscription.spentSoFar,
+      mealsRemaining: subscription.mealsRemaining,
+      dailyAvgLimit: subscription.dailyAvgLimit,
+    };
+
+    // 4. Call ai-agent-service
+    return this.aiAgent.analyze({
+      preferenceProfile: profile,
+      menuItems,
+      weeklyBudget,
+    });
+  }
+
   async runScoutPhase() {
     throw new Error("not implemented in scaffold");
   }

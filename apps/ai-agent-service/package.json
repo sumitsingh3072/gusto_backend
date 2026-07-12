@@ -1,0 +1,9 @@
+{
+  "name": "ai-agent-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "poetry install && poetry run uvicorn src.main:app --port 8001",
+    "test:python": "poetry run pytest tests/"
+  }
+}
