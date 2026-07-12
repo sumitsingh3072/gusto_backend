@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "poetry run uvicorn src.main:app --port 8001",
-    "install": "poetry install",
-    "test": "poetry run pytest tests/"
+    "dev": "poetry install && poetry run uvicorn src.main:app --port 8001",
+    "test:python": "poetry run pytest tests/"
   }
 }
