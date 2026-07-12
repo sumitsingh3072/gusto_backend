@@ -7,9 +7,17 @@ import { MenuItemSchema } from "./MenuItem";
  * POST /ai/scout/analyze
  * Called only by orchestrator-service.
  */
+export const WeeklyBudgetSchema = z.object({
+  totalAmount: z.number().positive(),       // e.g. ₹3500 (weekly deposit)
+  spentSoFar: z.number().nonnegative(),     // e.g. ₹1200
+  mealsRemaining: z.number().int().positive(), // e.g. 8
+  dailyAvgLimit: z.number().positive(),     // from escrow Subscription
+});
+
 export const ScoutAnalysisRequestSchema = z.object({
   preferenceProfile: PreferenceProfileSchema,
   menuItems: z.array(MenuItemSchema),
+  weeklyBudget: WeeklyBudgetSchema.optional(), // optional for backward compat
 });
 export type ScoutAnalysisRequest = z.infer<typeof ScoutAnalysisRequestSchema>;
 

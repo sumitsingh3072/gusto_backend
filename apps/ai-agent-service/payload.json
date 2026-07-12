@@ -1,0 +1,21 @@
+{
+  "preferenceProfile": {
+    "diet": "veg",
+    "spiceLevel": 3,
+    "cuisineFavorites": ["north-indian"]
+  },
+  "menuItems": [
+    {
+      "itemId": "1",
+      "restaurantId": "r1",
+      "name": "Paneer Tikka",
+      "price": 249.0
+    }
+  ],
+  "weeklyBudget": {
+    "totalAmount": 1000.0,
+    "spentSoFar": 200.0,
+    "mealsRemaining": 5,
+    "dailyAvgLimit": 200.0
+  }
+}
