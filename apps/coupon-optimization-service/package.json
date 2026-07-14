@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "dev": "nest start --watch",
+    "dev": "dotenv -e ../../.env -- nest start --watch",
     "start": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "jest --passWithNoTests",
@@ -22,6 +22,9 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@gusto/tsconfig": "workspace:*"
+    "@gusto/tsconfig": "workspace:*",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "@types/jest": "^29.5.12"
   }
 }
