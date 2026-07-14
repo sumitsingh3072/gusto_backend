@@ -1,5 +1,6 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Post } from "@nestjs/common";
 import { HackerService } from "./hacker.service";
+import { OptimizeCartRequestSchema, OptimizedCart } from "@gusto/contracts";
 
 @Controller("optimize")
 export class HackerController {
@@ -7,7 +8,11 @@ export class HackerController {
 
   // POST /optimize/cart -- called only by orchestrator-service
   @Post("cart")
-  optimizeCart(@Body() body: { shortlist: unknown }) {
-    return this.hacker.optimize(body.shortlist);
+  optimizeCart(@Body() body: unknown): Promise<OptimizedCart> {
+    const parsed = OptimizeCartRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+    return this.hacker.optimize(parsed.data);
   }
 }

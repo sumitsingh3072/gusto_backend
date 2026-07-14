@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DecisionLogEntrySchema } from "./DecisionLogEntry";
 
 export const OptimizedCartSchema = z.object({
   items: z.array(
@@ -13,6 +14,8 @@ export const OptimizedCartSchema = z.object({
   finalTotal: z.number().nonnegative(),
   savingsAchieved: z.number().nonnegative(),
   couponCode: z.string().optional(),
+  overBudget: z.boolean(),
+  decisionLog: z.array(DecisionLogEntrySchema),
 });
 
 export type OptimizedCart = z.infer<typeof OptimizedCartSchema>;

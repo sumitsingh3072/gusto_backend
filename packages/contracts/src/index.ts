@@ -15,3 +15,8 @@ export * from "./dto/PreferenceProfile";
 export * from "./dto/MenuItem";
 export * from "./dto/ScoutAnalysisRequest";
 export * from "./dto/OptimizedCart";
+export * from "./dto/CartItem";
+export * from "./dto/Coupon";
+export * from "./dto/FillerCandidate";
+export * from "./dto/DecisionLogEntry";
+export * from "./dto/OptimizeCartRequest";
