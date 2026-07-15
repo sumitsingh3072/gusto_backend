@@ -2,6 +2,13 @@ generator client {
   provider        = "prisma-client-js"
   output          = "./generated/client"
   previewFeatures = ["multiSchema"]
+  // "native" for local dev (Windows/macOS); "linux-musl-openssl-3.0.x" for
+  // the Docker runtime (node:20-alpine ships OpenSSL 3, not the legacy
+  // 1.1.x Prisma defaults to on musl without this override -- confirmed by
+  // a real `docker build`+`docker run`, which failed with "Error loading
+  // shared library libssl.so.1.1: No such file or directory" until this
+  // was added).
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -13,10 +20,10 @@ datasource db {
 model Order {
   id               String    @id @default(uuid()) @map("order_id")
   userId           String    @map("user_id")
-  swiggyOrderRef   String    @unique @map("swiggy_order_ref")
+  swiggyOrderRef   String?   @unique @map("swiggy_order_ref") // null until place_food_order succeeds
   status           String    // PENDING_CONFIRMATION | PLACED | OUT_FOR_DELIVERY | DELIVERED | FAILED
   cart             Json
-  savingsAchieved  Decimal   @map("savings_achieved")
+  savingsAchieved  Int       @map("savings_achieved") // paise, not Decimal -- see CLAUDE.md money rule
   agentLogs        String?   @map("agent_logs")
   placedAt         DateTime? @map("placed_at")
   deliveredAt      DateTime? @map("delivered_at")
