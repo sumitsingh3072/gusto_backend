@@ -17,7 +17,8 @@ model Subscription {
   id             String   @id @default(uuid()) @map("sub_id")
   userId         String   @unique @map("user_id")
   totalDeposited Int      @map("total_deposited") // paise, set on each deposit (cycle reset)
-  currentBalance Int      @map("current_balance") // paise, mutated by deposit/debit
+  currentBalance Int      @map("current_balance") // paise, mutated by deposit/debit/captureReservation
+  reservedAmount Int      @default(0) @map("reserved_amount") // paise, held but not yet captured/released
   daysLeft       Int      @map("days_left") // whole days remaining; decremented by tick
   dailyAvgLimit  Int      @map("daily_avg_limit") // paise, recomputed by deposit/rollover/tick
   createdAt      DateTime @default(now()) @map("created_at")

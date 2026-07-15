@@ -11,6 +11,9 @@ const DebitRequestSchema = z.object({
   savingsAchieved: z.number().int().nonnegative(),
 });
 const RolloverRequestSchema = z.object({ userId: z.string().min(1) });
+const ReserveRequestSchema = z.object({ userId: z.string().min(1), amount: z.number().int().positive() });
+const CaptureRequestSchema = z.object({ userId: z.string().min(1), amount: z.number().int().positive() });
+const ReleaseRequestSchema = z.object({ userId: z.string().min(1), amount: z.number().int().positive() });
 
 @Controller("wallet")
 export class WalletController {
@@ -35,6 +38,32 @@ export class WalletController {
     const parsed = RolloverRequestSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
     return this.wallet.rollover(parsed.data.userId);
+  }
+
+  // Intended future caller: order-execution-service, before place_food_order.
+  @Post("reserve")
+  reserve(@Body() body: unknown) {
+    const parsed = ReserveRequestSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
+    return this.wallet.reserve(parsed.data.userId, parsed.data.amount);
+  }
+
+  // Intended future caller: order-execution-service / OrderPlaced consumer,
+  // after a successful order placement whose amount was already reserve()'d.
+  @Post("capture")
+  capture(@Body() body: unknown) {
+    const parsed = CaptureRequestSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
+    return this.wallet.captureReservation(parsed.data.userId, parsed.data.amount);
+  }
+
+  // Intended future caller: order-execution-service, on a failed order
+  // placement whose amount was already reserve()'d.
+  @Post("release")
+  release(@Body() body: unknown) {
+    const parsed = ReleaseRequestSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
+    return this.wallet.releaseReservation(parsed.data.userId, parsed.data.amount);
   }
 
   // Intended caller: scheduler-service's future daily cron; not wired to

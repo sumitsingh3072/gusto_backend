@@ -10,6 +10,7 @@ function makeSub(overrides: Partial<Record<string, unknown>> = {}) {
     userId: "user-1",
     totalDeposited: 350000,
     currentBalance: 350000,
+    reservedAmount: 0,
     daysLeft: 30,
     dailyAvgLimit: 11666,
     createdAt: new Date(),
@@ -129,6 +130,117 @@ describe("WalletService", () => {
       prisma.subscription.findUnique.mockResolvedValue(makeSub({ daysLeft: 0 }));
       await expect(service.tick("user-1")).rejects.toBeInstanceOf(ConflictException);
       expect(prisma.subscription.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("reserve", () => {
+    it("increments reservedAmount inside a transaction using available balance and publishes BudgetUpdated", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(makeSub({ currentBalance: 245006, reservedAmount: 1000 }));
+      prisma.subscription.update.mockResolvedValue(makeSub({ currentBalance: 245006, reservedAmount: 11666 }));
+
+      const result = await service.reserve("user-1", 10666);
+
+      expect(prisma.subscription.update).toHaveBeenCalledWith({
+        where: { userId: "user-1" },
+        data: { reservedAmount: 11666 },
+      });
+      expect(result.reservedAmount).toBe(11666);
+      expect(publisher.publish).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects a non-positive reserve amount", async () => {
+      await expect(service.reserve("user-1", 0)).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.subscription.update).not.toHaveBeenCalled();
+    });
+
+    it("throws ConflictException when amount exceeds available balance (currentBalance - reservedAmount) and does not mutate", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(makeSub({ currentBalance: 5000, reservedAmount: 3000 }));
+
+      await expect(service.reserve("user-1", 3000)).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.subscription.update).not.toHaveBeenCalled();
+      expect(publisher.publish).not.toHaveBeenCalled();
+    });
+
+    it("throws NotFoundException for an unknown user", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(null);
+      await expect(service.reserve("ghost", 100)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("still returns the mutation result when publishing BudgetUpdated fails", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(makeSub({ currentBalance: 245006, reservedAmount: 0 }));
+      prisma.subscription.update.mockResolvedValue(makeSub({ currentBalance: 245006, reservedAmount: 11666 }));
+      publisher.publish.mockRejectedValue(new Error("event bus unreachable"));
+
+      const result = await service.reserve("user-1", 11666);
+      expect(result.reservedAmount).toBe(11666);
+    });
+  });
+
+  describe("captureReservation", () => {
+    it("decrements currentBalance and reservedAmount together and publishes BudgetUpdated", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(makeSub({ currentBalance: 245006, reservedAmount: 11666 }));
+      prisma.subscription.update.mockResolvedValue(makeSub({ currentBalance: 233340, reservedAmount: 0 }));
+
+      const result = await service.captureReservation("user-1", 11666);
+
+      expect(prisma.subscription.update).toHaveBeenCalledWith({
+        where: { userId: "user-1" },
+        data: { currentBalance: 233340, reservedAmount: 0 },
+      });
+      expect(result.currentBalance).toBe(233340);
+      expect(result.reservedAmount).toBe(0);
+      expect(publisher.publish).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws ConflictException when amount exceeds reservedAmount and does not mutate", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(makeSub({ currentBalance: 245006, reservedAmount: 500 }));
+
+      await expect(service.captureReservation("user-1", 11666)).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.subscription.update).not.toHaveBeenCalled();
+      expect(publisher.publish).not.toHaveBeenCalled();
+    });
+
+    it("throws NotFoundException for an unknown user", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(null);
+      await expect(service.captureReservation("ghost", 100)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("still returns the mutation result when publishing BudgetUpdated fails", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(makeSub({ currentBalance: 245006, reservedAmount: 11666 }));
+      prisma.subscription.update.mockResolvedValue(makeSub({ currentBalance: 233340, reservedAmount: 0 }));
+      publisher.publish.mockRejectedValue(new Error("event bus unreachable"));
+
+      const result = await service.captureReservation("user-1", 11666);
+      expect(result.currentBalance).toBe(233340);
+    });
+  });
+
+  describe("releaseReservation", () => {
+    it("decrements reservedAmount only, leaving currentBalance untouched, and does not publish", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(makeSub({ currentBalance: 245006, reservedAmount: 11666 }));
+      prisma.subscription.update.mockResolvedValue(makeSub({ currentBalance: 245006, reservedAmount: 0 }));
+
+      const result = await service.releaseReservation("user-1", 11666);
+
+      expect(prisma.subscription.update).toHaveBeenCalledWith({
+        where: { userId: "user-1" },
+        data: { reservedAmount: 0 },
+      });
+      expect(result.currentBalance).toBe(245006);
+      expect(result.reservedAmount).toBe(0);
+      expect(publisher.publish).not.toHaveBeenCalled();
+    });
+
+    it("throws ConflictException when amount exceeds reservedAmount and does not mutate", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(makeSub({ reservedAmount: 500 }));
+
+      await expect(service.releaseReservation("user-1", 11666)).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.subscription.update).not.toHaveBeenCalled();
+    });
+
+    it("throws NotFoundException for an unknown user", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(null);
+      await expect(service.releaseReservation("ghost", 100)).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
