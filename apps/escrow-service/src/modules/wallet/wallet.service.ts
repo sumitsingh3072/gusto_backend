@@ -80,6 +80,80 @@ export class WalletService {
     return updated;
   }
 
+  // Holds funds ahead of a Swiggy order placement without moving them yet --
+  // guards against the available balance (currentBalance - reservedAmount),
+  // not currentBalance alone, so concurrent reservations can't overcommit.
+  async reserve(userId: string, amount: number) {
+    if (amount <= 0) throw new ConflictException("reserve amount must be positive paise");
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const sub = await tx.subscription.findUnique({ where: { userId } });
+      if (!sub) throw new NotFoundException(`no subscription for userId ${userId}`);
+      const available = sub.currentBalance - sub.reservedAmount;
+      if (available < amount) {
+        throw new ConflictException(
+          `reserve of ${amount} paise exceeds available balance ${available} paise`,
+        );
+      }
+      const result = await tx.subscription.update({
+        where: { userId },
+        data: { reservedAmount: sub.reservedAmount + amount },
+      });
+      logger.info({ userId, amount }, "reserved subscription balance");
+      return result;
+    });
+    await this.publishBudgetUpdated(updated);
+    return updated;
+  }
+
+  // Turns an existing hold into a real debit -- the intended trigger is a
+  // confirmed OrderPlaced, called only after reserve() already succeeded for
+  // this amount, never called blind against currentBalance directly.
+  async captureReservation(userId: string, amount: number) {
+    if (amount <= 0) throw new ConflictException("capture amount must be positive paise");
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const sub = await tx.subscription.findUnique({ where: { userId } });
+      if (!sub) throw new NotFoundException(`no subscription for userId ${userId}`);
+      if (sub.reservedAmount < amount) {
+        throw new ConflictException(
+          `capture of ${amount} paise exceeds reserved amount ${sub.reservedAmount} paise`,
+        );
+      }
+      const result = await tx.subscription.update({
+        where: { userId },
+        data: {
+          currentBalance: sub.currentBalance - amount,
+          reservedAmount: sub.reservedAmount - amount,
+        },
+      });
+      logger.info({ userId, amount }, "captured reservation");
+      return result;
+    });
+    await this.publishBudgetUpdated(updated);
+    return updated;
+  }
+
+  // Frees a hold without moving currentBalance -- the intended trigger is a
+  // failed order placement after reserve() already succeeded.
+  async releaseReservation(userId: string, amount: number) {
+    if (amount <= 0) throw new ConflictException("release amount must be positive paise");
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const sub = await tx.subscription.findUnique({ where: { userId } });
+      if (!sub) throw new NotFoundException(`no subscription for userId ${userId}`);
+      if (sub.reservedAmount < amount) {
+        throw new ConflictException(
+          `release of ${amount} paise exceeds reserved amount ${sub.reservedAmount} paise`,
+        );
+      }
+      const result = await tx.subscription.update({
+        where: { userId },
+        data: { reservedAmount: sub.reservedAmount - amount },
+      });
+      logger.info({ userId, amount }, "released reservation");
+      return result;
+    });
+    return updated;
+  }
+
   async rollover(userId: string) {
     return this.rolloverService.redistribute(userId);
   }
