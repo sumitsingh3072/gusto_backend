@@ -2,6 +2,12 @@ generator client {
   provider        = "prisma-client-js"
   output          = "./generated/client"
   previewFeatures = ["multiSchema"]
+  // "native" for local dev; "linux-musl-openssl-3.0.x" for the Docker
+  // runtime (node:20-alpine ships OpenSSL 3, not the legacy 1.1.x Prisma
+  // defaults to on musl without this override) -- same fix applied to
+  // order-execution-service after a real docker build+run reproduced the
+  // failure.
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -19,5 +25,26 @@ model NotificationLog {
   sentAt    DateTime @default(now()) @map("sent_at")
 
   @@map("notification_log")
+  @@schema("notification")
+}
+
+/// Per-user delivery info: what channels can we actually reach them on, and
+/// have they opted out. Owned by notification-service (delivery-mechanism
+/// data), not auth-service's User (identity data) -- see
+/// prompting_docs/notification-service-developer-docs.md for the reasoning.
+model ContactPreference {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  email           String?
+  phone           String?
+  pushToken       String?  @map("push_token")
+  pushPlatform    String?  @map("push_platform") // "ios" | "android"
+  pushEndpointArn String?  @map("push_endpoint_arn") // cached SNS platform endpoint, created lazily
+  emailOptOut     Boolean  @default(false) @map("email_opt_out")
+  pushOptOut      Boolean  @default(false) @map("push_opt_out")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("contact_preferences")
   @@schema("notification")
 }
