@@ -2,9 +2,9 @@
 
 Every HTTP endpoint currently exposed by the implemented services, verified
 directly against each service's controllers. Services not listed here
-(`orchestrator-service`, `order-execution-service`, `escrow-service`,
-`scheduler-service`, `notification-service`) are scaffolded but stubbed —
-see `CLAUDE.md` for status.
+(`orchestrator-service`, `order-execution-service`, `scheduler-service`,
+`notification-service`) are scaffolded but stubbed — see `CLAUDE.md` for
+status.
 
 ---
 
@@ -73,6 +73,29 @@ shortlisted.
 |---|---|---|
 | `GET` | `/health` | Liveness probe |
 | `POST` | `/optimize/cart` | **Implemented.** Body: `OptimizeCartRequest` — `{ userId, restaurantId, addressId, cartItems, remainingDailyBudget }`. Returns `OptimizedCart` — `{ items, baseCost, fillerCost, discountApplied, finalTotal, savingsAchieved, couponCode?, overBudget, decisionLog }`. `400` on malformed body; degrades gracefully (never 500) if `mcp-gateway-service` or the event bus is unreachable. |
+
+---
+
+## escrow-service (port 3005)
+
+Owns the `escrow` schema exclusively. All money fields are integer paise.
+Every mutation runs inside a DB transaction.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/health` | Liveness probe |
+| `POST` | `/wallet/deposit` | Body: `{ userId, amount }` (paise). Resets to a fresh 30-day cycle (`totalDeposited`/`currentBalance` set to `amount`, `daysLeft: 30`, `dailyAvgLimit: floor(amount/30)`). `400` on malformed body. |
+| `POST` | `/wallet/debit` | Body: `{ userId, amount, savingsAchieved }`. Decrements `currentBalance`. `409` if `amount` exceeds `currentBalance` (overdraft guard); `404` if no subscription exists. |
+| `POST` | `/wallet/rollover` | Body: `{ userId }`. Recomputes `dailyAvgLimit = floor(currentBalance / daysLeft)`; does not touch `currentBalance`/`daysLeft`. Publishes `RolloverApplied`. |
+| `POST` | `/wallet/tick/:userId` | Decrements `daysLeft` by 1, recomputes `dailyAvgLimit`. **No caller wired yet** — intended for scheduler-service's future daily cron. `409` if the cycle has already ended (`daysLeft` was 0). |
+| `GET` | `/wallet/balance/:userId` | Returns the subscription row. `404` if none exists. |
+| `GET` | `/wallet/subscription/:userId` | Same shape as `balance/:userId`. Added to unblock orchestrator-service's future `EscrowClient.getSubscription()` — see `prompting_docs/KNOWN_ISSUES.md` item 1 for the field-mapping this endpoint's caller will need. |
+
+Consumes: `OrderPlaced` (debits `cart.finalTotal`), `MealSkipped` (triggers
+rollover). Publishes: `BudgetUpdated` (after every balance/limit mutation),
+`RolloverApplied` (after rollover). Event-bus publish failures are
+best-effort (logged, never fail the HTTP response); consumer-side failures
+(e.g. overdraft) propagate so the SQS message retries.
 
 ---
 

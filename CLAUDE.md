@@ -44,30 +44,53 @@ before making non-trivial changes. Per-service implementation specs live in
 ## Current implementation status (read before assuming a service "works")
 
 **Fully implemented, real business logic:** `auth-service`, `api-gateway`,
-`mcp-gateway-service`, `ai-agent-service`.
+`mcp-gateway-service`, `ai-agent-service`, `coupon-optimization-service`,
+`escrow-service`.
 
 **Scaffolded but stubbed** (real Prisma schema/DTOs/controllers/event
 publishers, but every service method and every event consumer body is
-`throw new Error("not implemented in scaffold")`): `orchestrator-service`,
-`coupon-optimization-service`, `order-execution-service`, `escrow-service`,
-`scheduler-service`, `notification-service`.
+`throw new Error("not implemented in scaffold")`): `orchestrator-service`
+(4 stubs: `WorkflowStateMachine.canTransition()`,
+`WorkflowService.runScoutPhase()`, `WorkflowService.handleUserDecision()`,
+`user-authenticated.consumer.ts`), `order-execution-service` (8 stubs),
+`scheduler-service` (1 stub: `dispatchDueCohorts()` — cron wiring and
+`OrchestratorClient.triggerScoutRun()` already real), `notification-service`
+(5 stubs: outbound `DispatchService.send()`/`SnsAdapter.push()` — the
+inbound decision webhook is already real).
+
+**Not yet started, no scaffold exists:** `payment-service` — real-money
+custody for `escrow-service` deposits/payouts is entirely unimplemented (no
+payment-gateway integration anywhere in this repo). See
+`prompting_docs/payment-service-integration-notes.md` for the recommended
+architecture (use a payment aggregator's nodal-account product — Razorpay
+Route/Cashfree Easy Split/Setu/Decentro — rather than self-custody) and the
+exact additive changes this requires in `escrow-service`.
+
+**Suggested build order for what's left:** `orchestrator-service` next — it's
+the connective tissue every other stubbed service depends on (ties together
+`ai-agent-service`, `coupon-optimization-service`, and `escrow-service`,
+all already real), and has the fewest remaining stubs. Then
+`order-execution-service` (executes what orchestrator approves), then
+`notification-service` (dispatch side only — webhook intake already works),
+then `scheduler-service` (smallest gap). `payment-service` should land
+before any of this touches real money in production, but has no hard
+ordering dependency on the others.
 
 Do not assume a stubbed service's methods do anything — check the actual
 method body before building on top of it, and don't be surprised by a thrown
 error in dev. When implementing one of these, `prompting_docs/` and each
-service's own `README.md` describe the intended design; for
-`coupon-optimization-service` specifically, use
-`apps/coupon-optimization-service/coupon-optimization-algorithm-design.md` as
-the authoritative algorithm spec — it defines a richer contract
-(`OptimizationInput`/`OptimizationResult`) than the current stub signature, so
-match the design doc, not the existing stub's parameter list.
+service's own `README.md` describe the intended design.
 
-**Known cross-service contract gap:** `orchestrator-service` expects an escrow
-subscription shape (`totalAmount`/`spentSoFar`/`mealsRemaining`) that doesn't
-match `escrow-service`'s actual Prisma model
-(`totalDeposited`/`currentBalance`/`daysLeft`). Reconcile this (pick one shape,
-update the other side or add an explicit mapping) before wiring orchestrator's
-escrow integration for real.
+**Known cross-service contract gap (narrowed):** `orchestrator-service`
+expects an escrow subscription shape
+(`totalAmount`/`spentSoFar`/`mealsRemaining`) that doesn't match
+`escrow-service`'s actual Prisma model
+(`totalDeposited`/`currentBalance`/`daysLeft`). `escrow-service` now exposes
+`GET /wallet/subscription/:userId` with the real shape — the remaining work
+is entirely on orchestrator's side: add a `getSubscription()` method to its
+`EscrowClient` plus a mapping layer (see
+`prompting_docs/escrow-service-developer-docs.md` §10) before wiring
+orchestrator's escrow integration for real.
 
 ## Conventions to follow when adding code
 

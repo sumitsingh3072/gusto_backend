@@ -10,15 +10,18 @@ datasource db {
   schemas  = ["escrow"]
 }
 
+/// The 30-day deposit cycle, one row per user. All money fields are integer
+/// paise (never floating rupees) -- see CLAUDE.md and
+/// coupon-optimization-algorithm-design.md §7.1.
 model Subscription {
-  id              String   @id @default(uuid()) @map("sub_id")
-  userId          String   @unique @map("user_id")
-  totalDeposited  Decimal  @map("total_deposited")
-  currentBalance  Decimal  @map("current_balance")
-  daysLeft        Int      @map("days_left")
-  dailyAvgLimit   Decimal  @map("daily_avg_limit")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid()) @map("sub_id")
+  userId         String   @unique @map("user_id")
+  totalDeposited Int      @map("total_deposited") // paise, set on each deposit (cycle reset)
+  currentBalance Int      @map("current_balance") // paise, mutated by deposit/debit
+  daysLeft       Int      @map("days_left") // whole days remaining; decremented by tick
+  dailyAvgLimit  Int      @map("daily_avg_limit") // paise, recomputed by deposit/rollover/tick
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("subscriptions")
   @@schema("escrow")
