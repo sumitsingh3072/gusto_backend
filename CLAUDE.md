@@ -45,7 +45,7 @@ before making non-trivial changes. Per-service implementation specs live in
 
 **Fully implemented, real business logic:** `auth-service`, `api-gateway`,
 `mcp-gateway-service`, `ai-agent-service`, `coupon-optimization-service`,
-`escrow-service`, `order-execution-service`.
+`escrow-service`, `order-execution-service`, `notification-service`.
 
 **Scaffolded but stubbed** (real Prisma schema/DTOs/controllers/event
 publishers, but every service method and every event consumer body is
@@ -54,9 +54,7 @@ publishers, but every service method and every event consumer body is
 `WorkflowService.runScoutPhase()`, `WorkflowService.handleUserDecision()`,
 `user-authenticated.consumer.ts`), `scheduler-service` (1 stub:
 `dispatchDueCohorts()` — cron wiring and `OrchestratorClient.triggerScoutRun()`
-already real), `notification-service` (5 stubs: outbound
-`DispatchService.send()`/`SnsAdapter.push()` — the inbound decision webhook
-is already real).
+already real).
 
 **Not yet started, no scaffold exists:** `payment-service` — real-money
 custody for `escrow-service` deposits/payouts is entirely unimplemented (no
@@ -66,14 +64,14 @@ architecture (use a payment aggregator's nodal-account product — Razorpay
 Route/Cashfree Easy Split/Setu/Decentro — rather than self-custody) and the
 exact additive changes this requires in `escrow-service`.
 
-**Suggested build order for what's left:** `notification-service` next
-(dispatch side only — webhook intake already works; `order-execution-service`
-now calls it fire-and-forget for confirmation requests, real implementation
-unblocks that path), then `orchestrator-service` (ties together
-`ai-agent-service`, `coupon-optimization-service`, `escrow-service`, and
-`order-execution-service`, all already real), then `scheduler-service`
-(smallest gap). `payment-service` should land before any of this touches
-real money in production, but has no hard ordering dependency on the others.
+**Suggested build order for what's left:** `orchestrator-service` next — it
+ties together `ai-agent-service`, `coupon-optimization-service`,
+`escrow-service`, `order-execution-service`, and `notification-service`, all
+already real. Then `scheduler-service` (smallest gap — cron wiring and
+`OrchestratorClient.triggerScoutRun()` are already real, only
+`dispatchDueCohorts()` itself is stubbed). `payment-service` should land
+before any of this touches real money in production, but has no hard
+ordering dependency on the others.
 
 Do not assume a stubbed service's methods do anything — check the actual
 method body before building on top of it, and don't be surprised by a thrown

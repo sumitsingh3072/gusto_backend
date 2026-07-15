@@ -17,6 +17,8 @@
     "@nestjs/platform-express": "^10.4.1",
     "@prisma/client": "^5.18.0",
     "@aws-sdk/client-sns": "^3.620.0",
+    "@aws-sdk/client-ses": "^3.620.0",
+    "axios": "^1.7.4",
     "@gusto/contracts": "workspace:*",
     "@gusto/event-bus": "workspace:*",
     "@gusto/config": "workspace:*",
@@ -25,6 +27,9 @@
   },
   "devDependencies": {
     "prisma": "^5.18.0",
-    "@gusto/tsconfig": "workspace:*"
+    "@gusto/tsconfig": "workspace:*",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "@types/jest": "^29.5.12"
   }
 }
