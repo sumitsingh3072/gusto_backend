@@ -46,18 +46,14 @@ before making non-trivial changes. Per-service implementation specs live in
 **Fully implemented, real business logic:** `auth-service`, `api-gateway`,
 `mcp-gateway-service`, `ai-agent-service`, `coupon-optimization-service`,
 `escrow-service`, `order-execution-service`, `notification-service`,
-`orchestrator-service`. See `prompting_docs/orchestrator-service-developer-docs.md`
-for what changed, including two additive contract changes to `auth-service`
-(new `GET /auth/internal/profile/:userId`) and `notification-service`
-(decision webhook gained `userId`), both verified in a real multi-service
-flow, not just unit tests.
-
-**Scaffolded but stubbed** (real Prisma schema/DTOs/controllers/event
-publishers, but every service method and every event consumer body is
-`throw new Error("not implemented in scaffold")`): `scheduler-service` (1
-stub: `dispatchDueCohorts()` — cron wiring and
-`OrchestratorClient.triggerScoutRun()` already real, and its request shape
-now matches orchestrator's real `POST /workflow/scout/run` contract).
+`orchestrator-service`, `scheduler-service`. See
+`prompting_docs/orchestrator-service-developer-docs.md` and
+`prompting_docs/scheduler-service-developer-docs.md` for what changed,
+including additive contract changes to `auth-service` (new `GET
+/auth/internal/profile/:userId`, and `User.prefProfile`/
+`PreferenceProfileSchema` gaining optional `defaultAddressId`/
+`defaultRestaurantId`) and `notification-service` (decision webhook gained
+`userId`), all verified in real multi-service flows, not just unit tests.
 
 **Not yet started, no scaffold exists:** `payment-service` — real-money
 custody for `escrow-service` deposits/payouts is entirely unimplemented (no
@@ -67,11 +63,9 @@ architecture (use a payment aggregator's nodal-account product — Razorpay
 Route/Cashfree Easy Split/Setu/Decentro — rather than self-custody) and the
 exact additive changes this requires in `escrow-service`.
 
-**Suggested build order for what's left:** `scheduler-service` next
-(smallest gap — cron wiring and `OrchestratorClient.triggerScoutRun()` are
-already real, only `dispatchDueCohorts()` itself is stubbed).
-`payment-service` should land before any of this touches real money in
-production, but has no hard ordering dependency on `scheduler-service`.
+**Suggested build order for what's left:** `payment-service` is the only
+remaining unimplemented piece, and should land before any of this touches
+real money in production.
 
 Do not assume a stubbed service's methods do anything — check the actual
 method body before building on top of it, and don't be surprised by a thrown
