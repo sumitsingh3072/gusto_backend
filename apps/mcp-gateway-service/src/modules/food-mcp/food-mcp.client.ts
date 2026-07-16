@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from "@nestjs/common";
 import axios, { isAxiosError } from "axios";
 import { createHash } from "node:crypto";
-import { TokenProviderService } from "./token-provider.service";
+import { TokenProviderService } from "../token-provider/token-provider.service";
 import { CacheService } from "../cache/cache.service";
 import { env } from "../../config/configuration";
 import { createLogger } from "@gusto/logger";

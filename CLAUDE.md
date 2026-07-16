@@ -45,16 +45,19 @@ before making non-trivial changes. Per-service implementation specs live in
 
 **Fully implemented, real business logic:** `auth-service`, `api-gateway`,
 `mcp-gateway-service`, `ai-agent-service`, `coupon-optimization-service`,
-`escrow-service`, `order-execution-service`, `notification-service`.
+`escrow-service`, `order-execution-service`, `notification-service`,
+`orchestrator-service`. See `prompting_docs/orchestrator-service-developer-docs.md`
+for what changed, including two additive contract changes to `auth-service`
+(new `GET /auth/internal/profile/:userId`) and `notification-service`
+(decision webhook gained `userId`), both verified in a real multi-service
+flow, not just unit tests.
 
 **Scaffolded but stubbed** (real Prisma schema/DTOs/controllers/event
 publishers, but every service method and every event consumer body is
-`throw new Error("not implemented in scaffold")`): `orchestrator-service`
-(4 stubs: `WorkflowStateMachine.canTransition()`,
-`WorkflowService.runScoutPhase()`, `WorkflowService.handleUserDecision()`,
-`user-authenticated.consumer.ts`), `scheduler-service` (1 stub:
-`dispatchDueCohorts()` — cron wiring and `OrchestratorClient.triggerScoutRun()`
-already real).
+`throw new Error("not implemented in scaffold")`): `scheduler-service` (1
+stub: `dispatchDueCohorts()` — cron wiring and
+`OrchestratorClient.triggerScoutRun()` already real, and its request shape
+now matches orchestrator's real `POST /workflow/scout/run` contract).
 
 **Not yet started, no scaffold exists:** `payment-service` — real-money
 custody for `escrow-service` deposits/payouts is entirely unimplemented (no
@@ -64,30 +67,16 @@ architecture (use a payment aggregator's nodal-account product — Razorpay
 Route/Cashfree Easy Split/Setu/Decentro — rather than self-custody) and the
 exact additive changes this requires in `escrow-service`.
 
-**Suggested build order for what's left:** `orchestrator-service` next — it
-ties together `ai-agent-service`, `coupon-optimization-service`,
-`escrow-service`, `order-execution-service`, and `notification-service`, all
-already real. Then `scheduler-service` (smallest gap — cron wiring and
-`OrchestratorClient.triggerScoutRun()` are already real, only
-`dispatchDueCohorts()` itself is stubbed). `payment-service` should land
-before any of this touches real money in production, but has no hard
-ordering dependency on the others.
+**Suggested build order for what's left:** `scheduler-service` next
+(smallest gap — cron wiring and `OrchestratorClient.triggerScoutRun()` are
+already real, only `dispatchDueCohorts()` itself is stubbed).
+`payment-service` should land before any of this touches real money in
+production, but has no hard ordering dependency on `scheduler-service`.
 
 Do not assume a stubbed service's methods do anything — check the actual
 method body before building on top of it, and don't be surprised by a thrown
 error in dev. When implementing one of these, `prompting_docs/` and each
 service's own `README.md` describe the intended design.
-
-**Known cross-service contract gap (narrowed):** `orchestrator-service`
-expects an escrow subscription shape
-(`totalAmount`/`spentSoFar`/`mealsRemaining`) that doesn't match
-`escrow-service`'s actual Prisma model
-(`totalDeposited`/`currentBalance`/`daysLeft`). `escrow-service` now exposes
-`GET /wallet/subscription/:userId` with the real shape — the remaining work
-is entirely on orchestrator's side: add a `getSubscription()` method to its
-`EscrowClient` plus a mapping layer (see
-`prompting_docs/escrow-service-developer-docs.md` §10) before wiring
-orchestrator's escrow integration for real.
 
 ## Conventions to follow when adding code
 

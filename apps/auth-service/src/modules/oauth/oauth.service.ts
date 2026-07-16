@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
+import { Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import axios, { isAxiosError } from "axios";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { TokenVaultService } from "../token-vault/token-vault.service";
@@ -167,6 +167,20 @@ export class OAuthService {
 
     const decryptedToken = this.tokenVault.decrypt(user.encryptedMcpToken);
     return { token: decryptedToken };
+  }
+
+  // GET /auth/internal/profile/:userId -- read-only, internal-network-only
+  // access to a user's preference profile. Same accepted-risk posture as
+  // getDecryptedMcpToken (no credential, relies on network isolation --
+  // see KNOWN_ISSUES.md item 4).
+  async getPreferenceProfile(userId: string): Promise<{ userId: string; prefProfile: unknown }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException(`no user found for userId ${userId}`);
+    }
+
+    return { userId, prefProfile: user.prefProfile };
   }
 
   private buildAuthorizationUrl(codeChallenge: string, state: string): string {

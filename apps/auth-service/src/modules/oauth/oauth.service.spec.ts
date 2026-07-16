@@ -1,4 +1,4 @@
-import { UnauthorizedException } from "@nestjs/common";
+import { NotFoundException, UnauthorizedException } from "@nestjs/common";
 import axios from "axios";
 import { OAuthService } from "./oauth.service";
 import { TokenVaultService } from "../token-vault/token-vault.service";
@@ -168,6 +168,22 @@ describe("OAuthService", () => {
       const result = await service.refresh({ userId: "user-1" });
 
       expect(result.status).toEqual("reauthentication_required");
+    });
+  });
+
+  describe("getPreferenceProfile", () => {
+    it("returns the user's stored preference profile", async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: "user-1", prefProfile: { diet: "veg" } });
+
+      const result = await service.getPreferenceProfile("user-1");
+
+      expect(result).toEqual({ userId: "user-1", prefProfile: { diet: "veg" } });
+    });
+
+    it("throws NotFoundException when the user does not exist", async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.getPreferenceProfile("no-such-user")).rejects.toThrow(NotFoundException);
     });
   });
 });
