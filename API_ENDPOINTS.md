@@ -1,10 +1,9 @@
 # Gusto Backend — API Endpoints
 
-Every HTTP endpoint currently exposed by the implemented services, verified
-directly against each service's controllers. Services not listed here
-(`orchestrator-service`, `order-execution-service`, `scheduler-service`,
-`notification-service`) are scaffolded but stubbed — see `CLAUDE.md` for
-status.
+Every HTTP endpoint currently exposed by each service, verified directly
+against each service's controllers. `payment-service` has no scaffold yet
+(deliberately deferred — see `CLAUDE.md`) and is not listed. Every other
+service is fully implemented.
 
 ---
 
@@ -34,7 +33,113 @@ token storage.
 | `POST` | `/auth/login/start` | No | Begins PKCE flow; returns `{ authorizationUrl, state }` |
 | `POST` | `/auth/login/callback` | No | Completes PKCE flow; returns `{ token, userId }` (Gusto JWT) |
 | `POST` | `/auth/token/refresh` | No (JWT-independent) | `{ userId }` → `{ status: "valid", expiresAt }` or `{ status: "reauthentication_required", authorizationUrl, state }` |
-| `POST` | `/auth/internal/token` | **None — network-isolation only** | `{ userId }` → `{ token: <plaintext Swiggy access token> }`. Internal-only; called by `mcp-gateway-service`. No auth guard yet — see `docs/KNOWN_ISSUES.md`. |
+| `POST` | `/auth/internal/token` | **None — network-isolation only** | `{ userId }` → `{ token: <plaintext Swiggy access token> }`. Internal-only; called by `mcp-gateway-service`. No auth guard yet — see `prompting_docs/KNOWN_ISSUES.md` item 4. |
+| `GET` | `/auth/internal/profile/:userId` | **None — network-isolation only** | Returns `{ userId, prefProfile }` — the user's stored preference profile (`diet`, `spiceLevel`, `cuisineFavorites`, optional `defaultAddressId`/`defaultRestaurantId`). Internal-only; called by `orchestrator-service` and `scheduler-service`. `404` if the user doesn't exist. |
+
+---
+
+## orchestrator-service (port 3002)
+
+Owns the `orchestrator` schema (`workflow_state`). Drives the daily
+Scout → Hacker → Approval → Sentinel lifecycle per user.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/health` | Liveness probe |
+| `POST` | `/workflow/scout/run` | Body: `{ userId, addressId, restaurantId }`. Called by `scheduler-service` at T-2h. Fetches escrow budget + preference profile + menu, ranks via `ai-agent-service`, optimizes via `coupon-optimization-service`, proposes via `notification-service`. `409` if the user was already scouted today. |
+| `POST` | `/workflow/decision` | Body: `{ userId, decision: "APPROVE" \| "SWAP" \| "SKIP" }`. Called by `notification-service`'s decision webhook. APPROVE → calls `order-execution-service`; SKIP → calls `escrow-service`'s rollover; SWAP → re-scouts the next-ranked item. `404` if no workflow exists for today; `409` if not currently awaiting approval. |
+
+Publishes: `ScoutCompleted`, `MenuProposed`, `MealApproved`, `MealSkipped`.
+Consumes: `UserAuthenticated` (currently a deliberately inert no-op handler).
+
+---
+
+## coupon-optimization-service (port 3003)
+
+Stateless. Called synchronously by `orchestrator-service` once a cart is
+shortlisted.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/health` | Liveness probe |
+| `POST` | `/optimize/cart` | Body: `OptimizeCartRequest` — `{ userId, restaurantId, addressId, cartItems, remainingDailyBudget }`. Returns `OptimizedCart` — `{ items, baseCost, fillerCost, discountApplied, finalTotal, savingsAchieved, couponCode?, overBudget, decisionLog }`. `400` on malformed body; degrades gracefully (never 500) if `mcp-gateway-service` or the event bus is unreachable. |
+
+---
+
+## order-execution-service (port 3004)
+
+Owns the `order_execution` schema. The "Sentinel" — places the real Swiggy
+order once a user approves, via `escrow-service`'s reserve/capture/release
+primitives (never raw `debit()`).
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/health` | Liveness probe |
+| `POST` | `/orders/execute` | Body: `{ userId, addressId, restaurantId, cart: OptimizedCart, paymentMethod? }`. Called by `orchestrator-service` after APPROVE. Reserves the budget, populates Swiggy's cart, and awaits confirmation. |
+| `POST` | `/orders/confirm` | Body: `{ orderId }`. Called once the user's biometric/PIN confirmation is received; places the real Swiggy order (`place_food_order` — non-idempotent, never auto-retried) and captures or releases the reservation depending on outcome. |
+| `GET` | `/orders/:orderId/status` | Returns the order's current status. |
+| `POST` | `/orders/:orderId/poll-delivery` | Manual trigger for delivery-status polling. **No caller wired yet** — intended for `scheduler-service`'s future executeTime trigger. |
+
+---
+
+## escrow-service (port 3005)
+
+Owns the `escrow` schema exclusively. All money fields are integer paise.
+Every mutation runs inside a DB transaction.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/health` | Liveness probe |
+| `POST` | `/wallet/deposit` | Body: `{ userId, amount }` (paise). Resets to a fresh 30-day cycle (`totalDeposited`/`currentBalance` set to `amount`, `daysLeft: 30`, `dailyAvgLimit: floor(amount/30)`). `400` on malformed body. |
+| `POST` | `/wallet/debit` | Body: `{ userId, amount, savingsAchieved }`. Decrements `currentBalance` directly. `409` if `amount` exceeds `currentBalance`; `404` if no subscription exists. Superseded by reserve/capture/release for order placement — see below. |
+| `POST` | `/wallet/rollover` | Body: `{ userId }`. Recomputes `dailyAvgLimit = floor(currentBalance / daysLeft)`; does not touch `currentBalance`/`daysLeft`. Publishes `RolloverApplied`. Called by `orchestrator-service` on SKIP. |
+| `POST` | `/wallet/reserve` | Body: `{ userId, amount }`. Holds funds against a pending order before `place_food_order`, without debiting yet. Called by `order-execution-service`. |
+| `POST` | `/wallet/capture` | Body: `{ userId, amount }`. Converts a reservation into a real debit after a confirmed Swiggy order placement. Called by `order-execution-service`. |
+| `POST` | `/wallet/release` | Body: `{ userId, amount }`. Releases a reservation back to available balance after a failed order placement. Called by `order-execution-service`. |
+| `POST` | `/wallet/tick/:userId` | Decrements `daysLeft` by 1, recomputes `dailyAvgLimit`. **No caller wired yet** — intended for a future daily cron. `409` if the cycle has already ended. |
+| `GET` | `/wallet/balance/:userId` | Returns the subscription row. `404` if none exists. |
+| `GET` | `/wallet/subscription/:userId` | Same shape as `balance/:userId`. Called by `orchestrator-service`'s `EscrowClient.getSubscription()`. |
+
+Consumes: `OrderPlaced` (debits `cart.finalTotal`), `MealSkipped` (triggers
+rollover). Publishes: `BudgetUpdated`, `RolloverApplied`. Event-bus publish
+failures are best-effort (logged, never fail the HTTP response).
+
+---
+
+## scheduler-service (port 3006)
+
+Owns the `scheduler` schema (`schedule_config`). Fires the daily Scout
+trigger per staggered user cohort via direct HTTP to `orchestrator-service`
+(not events — timing precision matters here).
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/health` | Liveness probe |
+| `POST` | `/schedule-config` | Body: `{ userId, scoutTime, notifyTime, executeTime, timezone? }`. Upserts a user's daily trigger windows. **No caller wired yet** — designed ahead of its caller, same pattern as escrow's `tick()`. |
+
+No other routes — `dispatchDueCohorts()` is an internal cron (`*/5 * * * *`),
+not an HTTP endpoint. Only `scoutTime` is currently acted on; `notifyTime`/
+`executeTime` are stored but unused (`orchestrator-service` has no
+corresponding trigger endpoints yet — see `prompting_docs/KNOWN_ISSUES.md`
+item 28).
+
+---
+
+## notification-service (port 3007)
+
+Owns the `notification` schema. Multi-channel dispatch (email/push) plus the
+inbound decision webhook.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/health` | Liveness probe |
+| `POST` | `/notify/preferences` | Body: `{ userId, email?, phone?, pushToken?, pushPlatform?, emailOptOut?, pushOptOut? }`. Upserts a user's contact preferences. `pushToken`/`pushPlatform` must both be present or both absent. |
+| `GET` | `/notify/preferences/:userId` | Returns a user's contact preferences. |
+| `POST` | `/notify/send` | Body: `{ userId, type, ...payload }`. Called by `orchestrator-service` (`MENU_OF_THE_DAY`) and `order-execution-service`. Dispatches via email/push per the user's preferences and opt-outs. |
+| `POST` | `/notify/decision` | Body: `{ userId, decision: "APPROVE" \| "SWAP" \| "SKIP" }`. The inbound webhook for the user's Approve/Swap/Skip action (e.g. from a push notification tap); forwards to `orchestrator-service`'s `POST /workflow/decision`. Upstream errors rethrown with the same status; unreachable → `503`. |
+
+Consumes: `MenuProposed`, `OrderPlaced`, `OrderDelivered` (each drives a
+`notify/send`-equivalent dispatch internally).
 
 ---
 
@@ -64,38 +169,14 @@ Stateless. Only service allowed to call the LLM (Claude via LangGraph).
 
 ---
 
-## coupon-optimization-service (port 3003)
+## Not yet built
 
-Stateless. Called synchronously by `orchestrator-service` once a cart is
-shortlisted.
-
-| Method | Path | Notes |
-|---|---|---|
-| `GET` | `/health` | Liveness probe |
-| `POST` | `/optimize/cart` | **Implemented.** Body: `OptimizeCartRequest` — `{ userId, restaurantId, addressId, cartItems, remainingDailyBudget }`. Returns `OptimizedCart` — `{ items, baseCost, fillerCost, discountApplied, finalTotal, savingsAchieved, couponCode?, overBudget, decisionLog }`. `400` on malformed body; degrades gracefully (never 500) if `mcp-gateway-service` or the event bus is unreachable. |
-
----
-
-## escrow-service (port 3005)
-
-Owns the `escrow` schema exclusively. All money fields are integer paise.
-Every mutation runs inside a DB transaction.
-
-| Method | Path | Notes |
-|---|---|---|
-| `GET` | `/health` | Liveness probe |
-| `POST` | `/wallet/deposit` | Body: `{ userId, amount }` (paise). Resets to a fresh 30-day cycle (`totalDeposited`/`currentBalance` set to `amount`, `daysLeft: 30`, `dailyAvgLimit: floor(amount/30)`). `400` on malformed body. |
-| `POST` | `/wallet/debit` | Body: `{ userId, amount, savingsAchieved }`. Decrements `currentBalance`. `409` if `amount` exceeds `currentBalance` (overdraft guard); `404` if no subscription exists. |
-| `POST` | `/wallet/rollover` | Body: `{ userId }`. Recomputes `dailyAvgLimit = floor(currentBalance / daysLeft)`; does not touch `currentBalance`/`daysLeft`. Publishes `RolloverApplied`. |
-| `POST` | `/wallet/tick/:userId` | Decrements `daysLeft` by 1, recomputes `dailyAvgLimit`. **No caller wired yet** — intended for scheduler-service's future daily cron. `409` if the cycle has already ended (`daysLeft` was 0). |
-| `GET` | `/wallet/balance/:userId` | Returns the subscription row. `404` if none exists. |
-| `GET` | `/wallet/subscription/:userId` | Same shape as `balance/:userId`. Added to unblock orchestrator-service's future `EscrowClient.getSubscription()` — see `prompting_docs/KNOWN_ISSUES.md` item 1 for the field-mapping this endpoint's caller will need. |
-
-Consumes: `OrderPlaced` (debits `cart.finalTotal`), `MealSkipped` (triggers
-rollover). Publishes: `BudgetUpdated` (after every balance/limit mutation),
-`RolloverApplied` (after rollover). Event-bus publish failures are
-best-effort (logged, never fail the HTTP response); consumer-side failures
-(e.g. overdraft) propagate so the SQS message retries.
+`payment-service` — real-money custody for escrow deposits/payouts.
+Deliberately deferred until Swiggy production credentials and a frontend
+exist; the rest of the backend runs and has been verified end-to-end without
+it (escrow-service's ledger is entirely internal paise bookkeeping — no
+payment-gateway integration is on the critical path for any endpoint listed
+above).
 
 ---
 

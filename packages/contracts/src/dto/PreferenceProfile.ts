@@ -11,6 +11,8 @@ export const PreferenceProfileSchema = z.object({
   ]),
   cuisineFavorites: z.array(z.string()),
   nutritionTags: z.array(z.string()).optional(),
+  defaultAddressId: z.string().optional(),
+  defaultRestaurantId: z.string().optional(),
 });
 
 export type PreferenceProfile = z.infer<typeof PreferenceProfileSchema>;

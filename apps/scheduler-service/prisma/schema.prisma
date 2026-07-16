@@ -2,6 +2,7 @@ generator client {
   provider        = "prisma-client-js"
   output          = "./generated/client"
   previewFeatures = ["multiSchema"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -19,6 +20,7 @@ model ScheduleConfig {
   notifyTime    DateTime @map("notify_time")    // T-1h
   executeTime   DateTime @map("execute_time")   // T-30m
   timezone      String   @default("Asia/Kolkata")
+  lastDispatchedDate DateTime? @map("last_dispatched_date")
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@map("schedule_config")
