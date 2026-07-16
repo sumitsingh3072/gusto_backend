@@ -2,6 +2,7 @@ generator client {
   provider        = "prisma-client-js"
   output          = "./generated/client"
   previewFeatures = ["multiSchema"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -17,8 +18,11 @@ model WorkflowState {
   userId        String   @map("user_id")
   cycleDate     DateTime @map("cycle_date")
   phase         String   // SCOUTING | OPTIMIZING | AWAITING_APPROVAL | APPROVED | SKIPPED | EXECUTING | COMPLETE
+  addressId     String?  @map("address_id")
+  restaurantId  String?  @map("restaurant_id")
   shortlist     Json?    @map("shortlist")
   optimizedCart Json?    @map("optimized_cart")
+  rejectedItemIds Json?  @map("rejected_item_ids")
   decision      String?  // APPROVE | SWAP | SKIP
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")

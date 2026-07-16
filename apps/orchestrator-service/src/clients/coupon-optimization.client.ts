@@ -1,10 +1,16 @@
 import axios from "axios";
-import { OptimizedCart } from "@gusto/contracts";
+import { OptimizeCartRequest, OptimizedCart } from "@gusto/contracts";
+import { mapUpstreamError } from "./map-upstream-error";
 
 export class CouponOptimizationClient {
   constructor(private readonly baseUrl: string) {}
 
-  optimizeCart(shortlist: unknown): Promise<OptimizedCart> {
-    return axios.post(`${this.baseUrl}/optimize/cart`, { shortlist }).then((r) => r.data);
+  async optimizeCart(request: OptimizeCartRequest): Promise<OptimizedCart> {
+    try {
+      const response = await axios.post(`${this.baseUrl}/optimize/cart`, request, { timeout: 5000 });
+      return response.data;
+    } catch (err) {
+      mapUpstreamError(err);
+    }
   }
 }

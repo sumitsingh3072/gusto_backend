@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post } from "@nestjs/common";
 import { OAuthService } from "./oauth.service";
 import { StartLoginDto } from "./dto/start-login.dto";
 import { LoginCallbackDto } from "./dto/login-callback.dto";
@@ -33,5 +33,12 @@ export class OAuthController {
   @Post("internal/token")
   getInternalToken(@Body() dto: GetInternalTokenDto) {
     return this.oauthService.getDecryptedMcpToken(dto);
+  }
+
+  // GET /auth/internal/profile/:userId -- get a user's preference profile
+  // for internal use (currently orchestrator-service's Scout phase)
+  @Get("internal/profile/:userId")
+  getInternalProfile(@Param("userId") userId: string) {
+    return this.oauthService.getPreferenceProfile(userId);
   }
 }

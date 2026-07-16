@@ -12,9 +12,9 @@ export class DecisionWebhookController {
   constructor(private readonly orchestrator: OrchestratorClient) {}
 
   @Post("decision")
-  async forwardDecision(@Body() body: { decision: "APPROVE" | "SWAP" | "SKIP" }) {
+  async forwardDecision(@Body() body: { userId: string; decision: "APPROVE" | "SWAP" | "SKIP" }) {
     try {
-      return await this.orchestrator.submitDecision(body.decision);
+      return await this.orchestrator.submitDecision(body.userId, body.decision);
     } catch (err) {
       // Upstream error mapping per CLAUDE.md convention: upstream error
       // response -> rethrow with the same status; upstream unreachable ->
