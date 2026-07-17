@@ -16,4 +16,22 @@ export class OrchestratorClient {
       mapUpstreamError(err);
     }
   }
+
+  async triggerNotifyReminder(userId: string) {
+    try {
+      const response = await axios.post(`${this.baseUrl}/workflow/notify-reminder`, { userId }, { timeout: 5000 });
+      return response.data;
+    } catch (err) {
+      mapUpstreamError(err);
+    }
+  }
+
+  async triggerFinalize(userId: string) {
+    try {
+      const response = await axios.post(`${this.baseUrl}/workflow/finalize`, { userId }, { timeout: 5000 });
+      return response.data;
+    } catch (err) {
+      mapUpstreamError(err);
+    }
+  }
 }

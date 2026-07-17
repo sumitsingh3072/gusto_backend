@@ -12,3 +12,4 @@ apps/ai-agent-service/.venv/
 apps/ai-agent-service/__pycache__/
 prompting_docs/
 .agents/
+mock-swiggy-service/

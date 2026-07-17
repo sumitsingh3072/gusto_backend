@@ -3,6 +3,7 @@ import axios, { isAxiosError } from "axios";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { TokenVaultService } from "../token-vault/token-vault.service";
 import { JwtIssuerService } from "../jwt/jwt-issuer.service";
+import { TokenBlocklistService } from "@gusto/auth-middleware";
 import { PrismaService } from "../../prisma/prisma.service";
 import { StartLoginDto } from "./dto/start-login.dto";
 import { LoginCallbackDto } from "./dto/login-callback.dto";
@@ -58,7 +59,17 @@ export class OAuthService {
     private readonly jwtIssuer: JwtIssuerService,
     private readonly prisma: PrismaService,
     private readonly eventPublisher: EventPublisher,
+    private readonly tokenBlocklist: TokenBlocklistService,
   ) {}
+
+  // POST /auth/logout -- KNOWN_ISSUES.md item 10. Blocklists the token's
+  // jti for exactly its remaining lifetime, so the entry self-expires
+  // rather than needing separate cleanup.
+  async logout(token: string): Promise<void> {
+    const { jti, exp } = this.jwtIssuer.verifyWithExpiry(token);
+    const ttlSeconds = exp - Math.floor(Date.now() / 1000);
+    await this.tokenBlocklist.revoke(jti, ttlSeconds);
+  }
 
   async startPkceFlow(dto: StartLoginDto): Promise<AuthorizationChallenge> {
     await this.sweepExpiredSessions();
@@ -216,7 +227,9 @@ export class OAuthService {
     }
   }
 
-  private async sweepExpiredSessions(): Promise<void> {
+  // Public: also called on a schedule by SessionCleanupService, not just
+  // opportunistically at the top of startPkceFlow() (KNOWN_ISSUES.md item 11).
+  async sweepExpiredSessions(): Promise<void> {
     await this.prisma.pendingAuthSession.deleteMany({ where: { expiresAt: { lt: new Date() } } });
   }
 

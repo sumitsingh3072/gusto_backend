@@ -6,15 +6,17 @@ import {
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { IS_PUBLIC_KEY } from "./public.decorator";
-import { verifyJwt } from "@gusto/auth-middleware";
+import { verifyJwt, TokenBlocklistService } from "@gusto/auth-middleware";
 import { env } from "../config/configuration";
-import jwt from "jsonwebtoken";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly tokenBlocklist: TokenBlocklistService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -28,18 +30,18 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const token = authHeader.slice(7);
-    let decoded: string | jwt.JwtPayload;
+    let payload;
     try {
-      decoded = verifyJwt(token, env.JWT_SECRET);
+      payload = verifyJwt(token, env.JWT_SECRET);
     } catch {
       throw new UnauthorizedException("Invalid or expired token");
     }
 
-    if (typeof decoded === "string" || typeof decoded.sub !== "string") {
-      throw new UnauthorizedException("Malformed token payload");
+    if (await this.tokenBlocklist.isRevoked(payload.jti)) {
+      throw new UnauthorizedException("Token has been revoked");
     }
 
-    request.user = { userId: decoded.sub };
+    request.user = { userId: payload.sub };
     return true;
   }
 }

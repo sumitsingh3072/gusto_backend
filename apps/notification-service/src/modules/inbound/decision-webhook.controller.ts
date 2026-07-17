@@ -21,8 +21,12 @@ export class DecisionWebhookController {
       // 503. Never leak raw axios errors/stack traces to a client.
       if (axios.isAxiosError(err)) {
         if (err.response) {
-          const message = (err.response.data as { message?: string } | undefined)?.message ?? err.message;
-          throw new HttpException(message, err.response.status);
+          // orchestrator's zod BadRequestException body is {formErrors,
+          // fieldErrors} -- no top-level `.message` field to reach for.
+          // Forward the real body as-is so callers see the actual
+          // validation detail instead of axios's generic
+          // "Request failed with status code N".
+          throw new HttpException(err.response.data ?? err.message, err.response.status);
         }
         throw new ServiceUnavailableException(`orchestrator-service unreachable: ${err.message}`);
       }

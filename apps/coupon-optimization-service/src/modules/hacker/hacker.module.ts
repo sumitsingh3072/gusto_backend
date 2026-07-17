@@ -14,7 +14,7 @@ import { env } from "../../config/configuration";
     HackerAlgorithm,
     {
       provide: McpGatewayClient,
-      useFactory: () => new McpGatewayClient(env.MCP_GATEWAY_URL),
+      useFactory: () => new McpGatewayClient(env.MCP_GATEWAY_SERVICE_URL),
     },
     {
       provide: EventPublisher,

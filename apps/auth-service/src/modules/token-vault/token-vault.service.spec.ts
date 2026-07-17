@@ -34,4 +34,9 @@ describe("TokenVaultService", () => {
   it("rejects a malformed encrypted string", () => {
     expect(() => vault.decrypt("not-the-expected-format")).toThrow(/Malformed encrypted token/);
   });
+
+  it("round-trips an empty-string plaintext instead of misclassifying it as malformed (KNOWN_ISSUES.md item 29)", () => {
+    const encrypted = vault.encrypt("");
+    expect(vault.decrypt(encrypted)).toEqual("");
+  });
 });

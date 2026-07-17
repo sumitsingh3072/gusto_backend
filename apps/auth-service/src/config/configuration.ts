@@ -45,6 +45,15 @@ export const envSchema = baseEnvSchema.extend({
         return false;
       }
     }, "MCP_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key (e.g. `openssl rand -base64 32`)"),
+
+  // Shared secret internal-only callers (mcp-gateway-service,
+  // orchestrator-service, scheduler-service) must send as
+  // X-Internal-Secret on /auth/internal/* routes -- see KNOWN_ISSUES.md
+  // item 4.
+  INTERNAL_SHARED_SECRET: z.string().min(16, "INTERNAL_SHARED_SECRET must be at least 16 characters"),
+
+  // Backs the logout/revocation blocklist -- see KNOWN_ISSUES.md item 10.
+  REDIS_URL: z.string().url(),
 });
 
 export type AuthServiceEnv = z.infer<typeof envSchema>;

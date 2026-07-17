@@ -75,7 +75,7 @@ export class WorkflowService {
     const [subscription, profile, menuItems] = await Promise.all([
       this.escrow.getSubscription(userId),
       this.auth.getPreferenceProfile(userId),
-      this.fetchMenu(userId, restaurantId),
+      this.fetchMenu(userId, addressId, restaurantId),
     ]);
 
     const weeklyBudget = {
@@ -148,6 +148,43 @@ export class WorkflowService {
     return this.swap(row.id, userId, row.addressId!, row.restaurantId!, shortlist, (row.rejectedItemIds as string[] | null) ?? []);
   }
 
+  // POST /workflow/notify-reminder -- invoked by scheduler-service at T-1h
+  // (KNOWN_ISSUES.md item 28). Re-sends the menu notification as a reminder
+  // if the user still hasn't decided; no-op otherwise (already decided, or
+  // no workflow ran today at all -- neither is an error worth surfacing to
+  // a cron caller).
+  async sendReminderIfPending(userId: string): Promise<{ userId: string; sent: boolean }> {
+    const cycleDate = startOfUtcDay(new Date());
+    const row = await this.prisma.workflowState.findUnique({ where: { userId_cycleDate: { userId, cycleDate } } });
+
+    if (!row || row.phase !== "AWAITING_APPROVAL") {
+      return { userId, sent: false };
+    }
+
+    await this.dispatchMenuNotification(userId, row.optimizedCart as unknown as OptimizedCart);
+    return { userId, sent: true };
+  }
+
+  // POST /workflow/finalize -- invoked by scheduler-service at T-30m
+  // (KNOWN_ISSUES.md item 28). If the user still hasn't decided, auto-
+  // transitions to SKIP -- never auto-APPROVE, since order.service.ts
+  // establishes "never place an order without a confirmed human-in-the-loop
+  // gate" as a hard guardrail elsewhere in this codebase; auto-skip (no
+  // money moves, budget just rolls over) is the only outcome consistent
+  // with that. No-op if already decided or no workflow ran today.
+  async finalizeIfPending(userId: string): Promise<{ userId: string; finalized: boolean; phase?: string }> {
+    const cycleDate = startOfUtcDay(new Date());
+    const row = await this.prisma.workflowState.findUnique({ where: { userId_cycleDate: { userId, cycleDate } } });
+
+    if (!row || row.phase !== "AWAITING_APPROVAL") {
+      return { userId, finalized: false };
+    }
+
+    const shortlist = row.shortlist as unknown as ShortlistState;
+    const result = await this.skip(row.id, userId, shortlist);
+    return { userId, finalized: true, phase: result.phase };
+  }
+
   private async approve(
     rowId: string,
     userId: string,
@@ -218,7 +255,7 @@ export class WorkflowService {
     }
 
     const nextRejected = [...rejectedItemIds, shortlist.currentItem.itemId];
-    const menuItems = await this.fetchMenu(userId, restaurantId);
+    const menuItems = await this.fetchMenu(userId, addressId, restaurantId);
     const proposal = this.selectNextCandidate(menuItems, shortlist.rankedItems, nextRejected);
 
     if (!proposal) {
@@ -260,17 +297,30 @@ export class WorkflowService {
     return { diet: "veg" as const, spiceLevel: 3 as const, cuisineFavorites: [] };
   }
 
-  private async fetchMenu(userId: string, restaurantId: string): Promise<MenuItem[]> {
-    let response: { success: boolean; data?: { items?: unknown[] } };
+  private async fetchMenu(userId: string, addressId: string, restaurantId: string): Promise<MenuItem[]> {
+    // get_restaurant_menu requires addressId and returns items paginated by
+    // category (data.categories[].items[]), each item keyed by `id` (not
+    // `itemId`) with no per-item restaurantId -- see
+    // .agents/rules/swiggy_get_restaurant_menu.md and the "Order food
+    // end-to-end" recipe's `menu.data.items[0].id` usage in
+    // .agents/rules/swiggy_llms.txt. Confirmed against the docs-faithful
+    // mock server during Phase 2 e2e testing (KNOWN_ISSUES.md item 30).
+    let response: {
+      success: boolean;
+      data?: { categories?: { items?: { id?: unknown; name?: unknown; price?: unknown; description?: unknown }[] }[] };
+    };
     try {
-      response = await this.mcpGateway.food<{ items?: unknown[] }>("get_restaurant_menu", { restaurantId }, userId);
+      response = await this.mcpGateway.food<{
+        categories?: { items?: { id?: unknown; name?: unknown; price?: unknown; description?: unknown }[] }[];
+      }>("get_restaurant_menu", { addressId, restaurantId }, userId);
     } catch (err) {
       mapUpstreamError(err);
     }
-    const rawItems = response.data?.items ?? [];
+    const rawItems = response.data?.categories?.flatMap((c) => c.items ?? []) ?? [];
     const items: MenuItem[] = [];
     for (const raw of rawItems) {
-      const parsed = MenuItemSchema.safeParse(raw);
+      const mapped = { itemId: raw.id, restaurantId, name: raw.name, price: raw.price, description: raw.description };
+      const parsed = MenuItemSchema.safeParse(mapped);
       if (parsed.success) {
         items.push(parsed.data);
       }

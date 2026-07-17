@@ -6,6 +6,7 @@ export const envSchema = baseEnvSchema.extend({
   SCHEDULER_DATABASE_URL: z.string().url(),
   AUTH_SERVICE_URL: z.string().url(),
   ORCHESTRATOR_SERVICE_URL: z.string().url(),
+  INTERNAL_SHARED_SECRET: z.string().min(16, "INTERNAL_SHARED_SECRET must be at least 16 characters"),
 });
 
 export const env = envSchema.parse(process.env);

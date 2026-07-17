@@ -1,7 +1,12 @@
-# Local dev only. Mirrors prod topology at small scale: one Postgres instance
-# with one schema per stateful service, Redis for caching/rate-limiting, and
-# LocalStack standing in for SQS/EventBridge.
-version: "3.9"
+# Local dev / Phase 3 verification. Mirrors prod topology at small scale:
+# one Postgres instance with one schema per stateful service, Redis for
+# caching/rate-limiting, LocalStack standing in for SQS/EventBridge, and
+# mock-swiggy-service standing in for Swiggy's real MCP servers (built in
+# Phase 1 of e2e-mock-swiggy-testing-prompt.md). All cross-service URLs
+# below use compose service DNS names, not localhost -- container-to-
+# container traffic never resolves localhost to another container.
+name: gusto-backend
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -21,6 +26,208 @@ services:
     environment:
       SERVICES: sqs,events,sns,ses
     ports: ["4566:4566"]
+
+  mock-swiggy-service:
+    build:
+      context: ../..
+      dockerfile: apps/mock-swiggy-service/Dockerfile
+    environment:
+      PORT: "3010"
+    ports: ["3010:3010"]
+
+  auth-service:
+    build:
+      context: ../..
+      dockerfile: apps/auth-service/Dockerfile
+    depends_on: [postgres, redis, localstack]
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS_ENDPOINT: http://localstack:4566
+      EVENT_BUS_REGION: ap-south-1
+      PORT: "3001"
+      AUTH_DATABASE_URL: postgresql://gusto:password@postgres:5432/gusto?schema=auth
+      SWIGGY_OAUTH_BASE_URL: http://localhost:4000
+      SWIGGY_OAUTH_CLIENT_ID: mock-client-id-12345
+      SWIGGY_OAUTH_REDIRECT_URI: http://auth-service:3001/mock-callback
+      SWIGGY_OAUTH_SCOPE: "mcp:tools mcp:resources mcp:prompts"
+      SWIGGY_OAUTH_CLIENT_SECRET: ""
+      JWT_SECRET: dev-super-secret-jwt-key-1234567890
+      JWT_EXPIRES_IN_SECONDS: "43200"
+      MCP_TOKEN_ENCRYPTION_KEY: 3SEt8WbjIbJUap/IdUa4xq+9BFaucUDQBeTnx309Fi4=
+      INTERNAL_SHARED_SECRET: M0pwrV/8RSySQjqJdLcBxOxOYLDrOrPN
+      REDIS_URL: redis://redis:6379
+    ports: ["3001:3001"]
+
+  api-gateway:
+    build:
+      context: ../..
+      dockerfile: apps/api-gateway/Dockerfile
+    depends_on: [auth-service, redis, localstack]
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS_ENDPOINT: http://localstack:4566
+      EVENT_BUS_REGION: ap-south-1
+      PORT: "3000"
+      AUTH_SERVICE_URL: http://auth-service:3001
+      JWT_SECRET: dev-super-secret-jwt-key-1234567890
+      REDIS_URL: redis://redis:6379
+    ports: ["3000:3000"]
+
+  escrow-service:
+    build:
+      context: ../..
+      dockerfile: apps/escrow-service/Dockerfile
+    depends_on: [postgres, localstack]
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS_ENDPOINT: http://localstack:4566
+      EVENT_BUS_REGION: ap-south-1
+      PORT: "3005"
+      ESCROW_DATABASE_URL: postgresql://gusto:password@postgres:5432/gusto?schema=escrow
+      ESCROW_ORDER_PLACED_QUEUE_URL: http://localstack:4566/000000000000/escrow-order-placed
+      ESCROW_MEAL_SKIPPED_QUEUE_URL: http://localstack:4566/000000000000/escrow-meal-skipped
+    ports: ["3005:3005"]
+
+  mcp-gateway-service:
+    build:
+      context: ../..
+      dockerfile: apps/mcp-gateway-service/Dockerfile
+    depends_on: [redis, auth-service, mock-swiggy-service, localstack]
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS_ENDPOINT: http://localstack:4566
+      EVENT_BUS_REGION: ap-south-1
+      PORT: "3008"
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:3001
+      # Points at the mock Swiggy Food MCP server (Phase 1), not the real
+      # mcp.swiggy.com -- this is the one var that stands in for Swiggy
+      # across the whole stack.
+      SWIGGY_MCP_FOOD_URL: http://mock-swiggy-service:3010/food
+      RATE_LIMIT_READ: "120"
+      RATE_LIMIT_WRITE: "30"
+      INTERNAL_SHARED_SECRET: M0pwrV/8RSySQjqJdLcBxOxOYLDrOrPN
+    ports: ["3008:3008"]
+
+  coupon-optimization-service:
+    build:
+      context: ../..
+      dockerfile: apps/coupon-optimization-service/Dockerfile
+    depends_on: [localstack, mcp-gateway-service]
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS_ENDPOINT: http://localstack:4566
+      EVENT_BUS_REGION: ap-south-1
+      PORT: "3003"
+      MCP_GATEWAY_SERVICE_URL: http://mcp-gateway-service:3008
+      EVENT_QUEUE_URL: http://localstack:4566/000000000000/coupon-optimization-scout-completed
+    ports: ["3003:3003"]
+
+  order-execution-service:
+    build:
+      context: ../..
+      dockerfile: apps/order-execution-service/Dockerfile
+    depends_on: [postgres, localstack, mcp-gateway-service, escrow-service]
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS_ENDPOINT: http://localstack:4566
+      EVENT_BUS_REGION: ap-south-1
+      PORT: "3004"
+      ORDER_EXECUTION_DATABASE_URL: postgresql://gusto:password@postgres:5432/gusto?schema=order_execution
+      MCP_GATEWAY_SERVICE_URL: http://mcp-gateway-service:3008
+      ESCROW_SERVICE_URL: http://escrow-service:3005
+      NOTIFICATION_SERVICE_URL: http://notification-service:3007
+      ORDER_EXECUTION_CART_OPTIMIZED_QUEUE_URL: http://localstack:4566/000000000000/order-execution-cart-optimized
+      ORDER_EXECUTION_MEAL_APPROVED_QUEUE_URL: http://localstack:4566/000000000000/order-execution-meal-approved
+    ports: ["3004:3004"]
+
+  notification-service:
+    build:
+      context: ../..
+      dockerfile: apps/notification-service/Dockerfile
+    depends_on: [postgres, localstack]
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS_ENDPOINT: http://localstack:4566
+      EVENT_BUS_REGION: ap-south-1
+      PORT: "3007"
+      NOTIFICATION_DATABASE_URL: postgresql://gusto:password@postgres:5432/gusto?schema=notification
+      ORCHESTRATOR_SERVICE_URL: http://orchestrator-service:3002
+      SES_FROM_EMAIL_ADDRESS: noreply@gusto.dev
+      SNS_IOS_PLATFORM_APPLICATION_ARN: ""
+      SNS_ANDROID_PLATFORM_APPLICATION_ARN: ""
+      NOTIFICATION_MENU_PROPOSED_QUEUE_URL: http://localstack:4566/000000000000/notification-menu-proposed
+      NOTIFICATION_ORDER_PLACED_QUEUE_URL: http://localstack:4566/000000000000/notification-order-placed
+      NOTIFICATION_ORDER_DELIVERED_QUEUE_URL: http://localstack:4566/000000000000/notification-order-delivered
+    ports: ["3007:3007"]
+
+  orchestrator-service:
+    build:
+      context: ../..
+      dockerfile: apps/orchestrator-service/Dockerfile
+    depends_on:
+      - postgres
+      - localstack
+      - auth-service
+      - ai-agent-service
+      - coupon-optimization-service
+      - order-execution-service
+      - notification-service
+      - escrow-service
+      - mcp-gateway-service
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS_ENDPOINT: http://localstack:4566
+      EVENT_BUS_REGION: ap-south-1
+      PORT: "3002"
+      ORCHESTRATOR_DATABASE_URL: postgresql://gusto:password@postgres:5432/gusto?schema=orchestrator
+      AUTH_SERVICE_URL: http://auth-service:3001
+      AI_AGENT_SERVICE_URL: http://ai-agent-service:8001
+      COUPON_OPTIMIZATION_SERVICE_URL: http://coupon-optimization-service:3003
+      ORDER_EXECUTION_SERVICE_URL: http://order-execution-service:3004
+      NOTIFICATION_SERVICE_URL: http://notification-service:3007
+      ESCROW_SERVICE_URL: http://escrow-service:3005
+      MCP_GATEWAY_SERVICE_URL: http://mcp-gateway-service:3008
+      ORCHESTRATOR_USER_AUTHENTICATED_QUEUE_URL: http://localstack:4566/000000000000/orchestrator-user-authenticated
+      INTERNAL_SHARED_SECRET: M0pwrV/8RSySQjqJdLcBxOxOYLDrOrPN
+    ports: ["3002:3002"]
+
+  scheduler-service:
+    build:
+      context: ../..
+      dockerfile: apps/scheduler-service/Dockerfile
+    depends_on: [postgres, localstack, auth-service, orchestrator-service]
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS_ENDPOINT: http://localstack:4566
+      EVENT_BUS_REGION: ap-south-1
+      PORT: "3006"
+      SCHEDULER_DATABASE_URL: postgresql://gusto:password@postgres:5432/gusto?schema=scheduler
+      AUTH_SERVICE_URL: http://auth-service:3001
+      ORCHESTRATOR_SERVICE_URL: http://orchestrator-service:3002
+      INTERNAL_SHARED_SECRET: M0pwrV/8RSySQjqJdLcBxOxOYLDrOrPN
+    ports: ["3006:3006"]
+
+  ai-agent-service:
+    build:
+      # Not part of the pnpm workspace -- its Dockerfile expects its own
+      # directory as build context, unlike the Node services (which use
+      # repo-root context to resolve workspace:* dependencies).
+      context: ../../apps/ai-agent-service
+      dockerfile: Dockerfile
+    environment:
+      ANTHROPIC_API_KEY: ""
+      LOG_LEVEL: INFO
+    ports: ["8001:8001"]
 
 volumes:
   pgdata:

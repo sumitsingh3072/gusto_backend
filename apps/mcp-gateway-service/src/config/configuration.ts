@@ -8,6 +8,7 @@ export const envSchema = baseEnvSchema.extend({
   SWIGGY_MCP_FOOD_URL: z.string().url().default("https://mcp.swiggy.com/food"),
   RATE_LIMIT_READ: z.coerce.number().default(120),
   RATE_LIMIT_WRITE: z.coerce.number().default(30),
+  INTERNAL_SHARED_SECRET: z.string().min(16, "INTERNAL_SHARED_SECRET must be at least 16 characters"),
 });
 
 export const env = envSchema.parse(process.env);

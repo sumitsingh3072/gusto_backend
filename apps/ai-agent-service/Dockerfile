@@ -8,6 +8,10 @@ FROM python:3.11-slim AS runtime
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 COPY --from=build /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+# Console-script entrypoints (uvicorn, etc.) install to /usr/local/bin, not
+# site-packages -- without this, `uvicorn` isn't on PATH in the runtime
+# image at all.
+COPY --from=build /usr/local/bin /usr/local/bin
 COPY . .
 EXPOSE 8001
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8001"]

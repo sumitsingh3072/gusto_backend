@@ -12,6 +12,8 @@ function makeRow(overrides: Partial<Record<string, unknown>> = {}) {
     executeTime: new Date(Date.UTC(2000, 0, 1, 11, 30, 0)),
     timezone: "Asia/Kolkata",
     lastDispatchedDate: null,
+    lastNotifiedDate: null,
+    lastFinalizedDate: null,
     createdAt: new Date(),
     ...overrides,
   };
@@ -19,14 +21,18 @@ function makeRow(overrides: Partial<Record<string, unknown>> = {}) {
 
 describe("CohortScheduler", () => {
   let prisma: { scheduleConfig: { findMany: jest.Mock; update: jest.Mock } };
-  let orchestrator: jest.Mocked<Pick<OrchestratorClient, "triggerScoutRun">>;
+  let orchestrator: jest.Mocked<Pick<OrchestratorClient, "triggerScoutRun" | "triggerNotifyReminder" | "triggerFinalize">>;
   let auth: jest.Mocked<Pick<AuthClient, "getPreferenceProfile">>;
   let scheduler: CohortScheduler;
 
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(new Date(Date.UTC(2026, 6, 16, 10, 5, 0))); // 10:05 UTC -- past scoutTime
     prisma = { scheduleConfig: { findMany: jest.fn(), update: jest.fn() } };
-    orchestrator = { triggerScoutRun: jest.fn().mockResolvedValue(undefined) };
+    orchestrator = {
+      triggerScoutRun: jest.fn().mockResolvedValue(undefined),
+      triggerNotifyReminder: jest.fn().mockResolvedValue(undefined),
+      triggerFinalize: jest.fn().mockResolvedValue(undefined),
+    };
     auth = { getPreferenceProfile: jest.fn() };
     scheduler = new CohortScheduler(
       orchestrator as unknown as OrchestratorClient,
@@ -107,6 +113,55 @@ describe("CohortScheduler", () => {
 
     expect(orchestrator.triggerScoutRun).toHaveBeenCalledTimes(2);
     expect(prisma.scheduleConfig.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("fires notify-reminder and finalize independently of scout, once each due time has passed", async () => {
+    jest.setSystemTime(new Date(Date.UTC(2026, 6, 16, 11, 35, 0))); // past all 3 windows
+    prisma.scheduleConfig.findMany.mockResolvedValue([
+      makeRow({ lastDispatchedDate: new Date(Date.UTC(2026, 6, 16)) }), // scout already fired today
+    ]);
+
+    await scheduler.dispatchDueCohorts();
+
+    // scout must NOT re-fire (already dispatched today)
+    expect(orchestrator.triggerScoutRun).not.toHaveBeenCalled();
+    // notify and finalize each fire exactly once, independently
+    expect(orchestrator.triggerNotifyReminder).toHaveBeenCalledWith("user-1");
+    expect(orchestrator.triggerFinalize).toHaveBeenCalledWith("user-1");
+    expect(prisma.scheduleConfig.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "row-1" }, data: { lastNotifiedDate: expect.any(Date) } }),
+    );
+    expect(prisma.scheduleConfig.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "row-1" }, data: { lastFinalizedDate: expect.any(Date) } }),
+    );
+  });
+
+  it("does not re-fire notify-reminder or finalize once already fired today", async () => {
+    jest.setSystemTime(new Date(Date.UTC(2026, 6, 16, 11, 35, 0)));
+    prisma.scheduleConfig.findMany.mockResolvedValue([
+      makeRow({
+        lastDispatchedDate: new Date(Date.UTC(2026, 6, 16)),
+        lastNotifiedDate: new Date(Date.UTC(2026, 6, 16)),
+        lastFinalizedDate: new Date(Date.UTC(2026, 6, 16)),
+      }),
+    ]);
+
+    await scheduler.dispatchDueCohorts();
+
+    expect(orchestrator.triggerNotifyReminder).not.toHaveBeenCalled();
+    expect(orchestrator.triggerFinalize).not.toHaveBeenCalled();
+  });
+
+  it("isolates a notify-reminder failure without blocking finalize for the same row", async () => {
+    jest.setSystemTime(new Date(Date.UTC(2026, 6, 16, 11, 35, 0)));
+    prisma.scheduleConfig.findMany.mockResolvedValue([
+      makeRow({ lastDispatchedDate: new Date(Date.UTC(2026, 6, 16)) }),
+    ]);
+    orchestrator.triggerNotifyReminder.mockRejectedValueOnce(new Error("orchestrator unreachable"));
+
+    await expect(scheduler.dispatchDueCohorts()).resolves.toBeUndefined();
+
+    expect(orchestrator.triggerFinalize).toHaveBeenCalledWith("user-1");
   });
 
   it("does not query for rows already dispatched today, per the findMany filter", async () => {

@@ -4,13 +4,14 @@ import { env } from "../config/configuration";
 
 @Injectable()
 export class AuthProxyService {
-  async forward(method: string, path: string, body?: unknown) {
+  async forward(method: string, path: string, body?: unknown, authHeader?: string) {
     try {
       const response = await axios({
         method,
         url: env.AUTH_SERVICE_URL + path,
         data: body,
         timeout: 10_000,
+        headers: authHeader ? { Authorization: authHeader } : undefined,
       });
       return response.data;
     } catch (error) {

@@ -19,6 +19,13 @@ const MENU_ITEMS = [
   { itemId: "item-2", restaurantId: "rest-1", name: "Veg Biryani", price: 20000 },
 ];
 
+// get_restaurant_menu's real response shape (KNOWN_ISSUES.md item 30):
+// category-paginated, items keyed `id` not `itemId` -- matches what
+// fetchMenu() actually parses (maps id -> itemId, injects restaurantId).
+const MENU_RESPONSE = {
+  categories: [{ items: MENU_ITEMS.map((i) => ({ id: i.itemId, name: i.name, price: i.price })) }],
+};
+
 const SUBSCRIPTION = {
   userId: "user-1",
   totalDeposited: 350000,
@@ -108,7 +115,7 @@ describe("WorkflowService", () => {
       mealSkippedPublisher as unknown as MealSkippedPublisher,
     );
 
-    mcpGateway.food.mockResolvedValue({ success: true, data: { items: MENU_ITEMS } });
+    mcpGateway.food.mockResolvedValue({ success: true, data: MENU_RESPONSE });
     escrow.getSubscription.mockResolvedValue(SUBSCRIPTION);
     auth.getPreferenceProfile.mockResolvedValue({ userId: "user-1", prefProfile: { diet: "veg", spiceLevel: 3, cuisineFavorites: [] } });
     aiAgent.analyze.mockResolvedValue({
@@ -237,6 +244,73 @@ describe("WorkflowService", () => {
 
       expect(result.phase).toEqual("SKIPPED");
       expect(escrow.rollover).toHaveBeenCalledWith("user-1");
+    });
+  });
+
+  describe("sendReminderIfPending", () => {
+    it("re-sends the menu notification when still AWAITING_APPROVAL", async () => {
+      prisma.workflowState.findUnique.mockResolvedValue(
+        makeRow({ phase: "AWAITING_APPROVAL", optimizedCart: OPTIMIZED_CART }),
+      );
+
+      const result = await service.sendReminderIfPending("user-1");
+
+      expect(result).toEqual({ userId: "user-1", sent: true });
+      expect(notification.sendMenuOfTheDay).toHaveBeenCalledWith("user-1", OPTIMIZED_CART);
+    });
+
+    it("no-ops when already decided", async () => {
+      prisma.workflowState.findUnique.mockResolvedValue(makeRow({ phase: "SKIPPED" }));
+
+      const result = await service.sendReminderIfPending("user-1");
+
+      expect(result).toEqual({ userId: "user-1", sent: false });
+      expect(notification.sendMenuOfTheDay).not.toHaveBeenCalled();
+    });
+
+    it("no-ops when no workflow ran today", async () => {
+      prisma.workflowState.findUnique.mockResolvedValue(null);
+
+      const result = await service.sendReminderIfPending("user-1");
+
+      expect(result).toEqual({ userId: "user-1", sent: false });
+    });
+  });
+
+  describe("finalizeIfPending", () => {
+    const shortlist = {
+      rankedItems: [{ itemId: "item-2", semanticTags: [], matchScore: 0.9 }],
+      currentItem: MENU_ITEMS[1],
+    };
+
+    it("auto-transitions to SKIPPED (never auto-APPROVE) when still AWAITING_APPROVAL", async () => {
+      prisma.workflowState.findUnique.mockResolvedValue(
+        makeRow({ phase: "AWAITING_APPROVAL", shortlist, optimizedCart: OPTIMIZED_CART }),
+      );
+      prisma.workflowState.update.mockResolvedValue(makeRow({ phase: "SKIPPED" }));
+
+      const result = await service.finalizeIfPending("user-1");
+
+      expect(result).toEqual({ userId: "user-1", finalized: true, phase: "SKIPPED" });
+      expect(escrow.rollover).toHaveBeenCalledWith("user-1");
+      expect(orderExecution.executeOrder).not.toHaveBeenCalled();
+    });
+
+    it("no-ops when already decided", async () => {
+      prisma.workflowState.findUnique.mockResolvedValue(makeRow({ phase: "EXECUTING" }));
+
+      const result = await service.finalizeIfPending("user-1");
+
+      expect(result).toEqual({ userId: "user-1", finalized: false });
+      expect(escrow.rollover).not.toHaveBeenCalled();
+    });
+
+    it("no-ops when no workflow ran today", async () => {
+      prisma.workflowState.findUnique.mockResolvedValue(null);
+
+      const result = await service.finalizeIfPending("user-1");
+
+      expect(result).toEqual({ userId: "user-1", finalized: false });
     });
   });
 });

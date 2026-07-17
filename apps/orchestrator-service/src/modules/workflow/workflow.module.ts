@@ -26,7 +26,7 @@ import { env } from "../../config/configuration";
     { provide: OrderExecutionClient, useFactory: () => new OrderExecutionClient(env.ORDER_EXECUTION_SERVICE_URL) },
     { provide: NotificationClient, useFactory: () => new NotificationClient(env.NOTIFICATION_SERVICE_URL) },
     { provide: EscrowClient, useFactory: () => new EscrowClient(env.ESCROW_SERVICE_URL) },
-    { provide: AuthClient, useFactory: () => new AuthClient(env.AUTH_SERVICE_URL) },
+    { provide: AuthClient, useFactory: () => new AuthClient(env.AUTH_SERVICE_URL, env.INTERNAL_SHARED_SECRET) },
     { provide: McpGatewayClient, useFactory: () => new McpGatewayClient(env.MCP_GATEWAY_SERVICE_URL) },
     { provide: EventPublisher, useFactory: () => new EventPublisher(env.EVENT_BUS_ENDPOINT, "orchestrator-service") },
     {
