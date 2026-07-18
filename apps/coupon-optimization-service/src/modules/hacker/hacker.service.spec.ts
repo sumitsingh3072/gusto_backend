@@ -35,24 +35,22 @@ describe("HackerService", () => {
       if (tool === "fetch_food_coupons") {
         return {
           success: true,
-          data: {
-            bestCoupons: [
-              {
-                code: "GAP30",
-                discountType: "flat",
-                discountValue: 6000,
-                maxDiscount: null,
-                minOrderValue: 30000,
-                paymentModes: ["online"],
-                isApplicable: true,
-                expiresAt: null,
-              },
-            ],
-          },
+          data: [
+            {
+              code: "GAP30",
+              discountType: "flat",
+              discountValue: 6000,
+              maxDiscount: null,
+              minCartValue: 30000,
+              requiresOnlinePayment: true,
+              isApplicable: true,
+              expiresAt: null,
+            },
+          ],
         };
       }
       if (tool === "get_restaurant_menu") {
-        return { success: true, data: { items: [{ itemId: "garlic_bread", price: 3500, inStock: true }] } };
+        return { success: true, data: { items: [{ id: "garlic_bread", price: 3500, inStock: true }] } };
       }
       throw new Error(`unexpected tool ${tool}`);
     });
@@ -124,7 +122,7 @@ describe("HackerService", () => {
       if (tool === "fetch_food_coupons") return { success: true, data: {} };
       if (tool === "get_restaurant_menu") {
         calls++;
-        return { success: true, data: { items: [{ itemId: `item_${calls}`, price: 100, inStock: true }] } };
+        return { success: true, data: { items: [{ id: `item_${calls}`, price: 100, inStock: true }] } };
       }
       throw new Error("unexpected");
     });
