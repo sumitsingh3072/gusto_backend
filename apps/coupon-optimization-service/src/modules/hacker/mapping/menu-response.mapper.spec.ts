@@ -4,8 +4,8 @@ describe("mapMenuResponseToFillerCandidates", () => {
   it("maps a flat items array into FillerCandidate[]", () => {
     const raw = {
       items: [
-        { itemId: "item_1", price: 3500, category: "side", inStock: true },
-        { itemId: "item_2", price: 4500, inStock: true },
+        { id: "item_1", price: 3500, category: "side", inStock: true },
+        { id: "item_2", price: 4500, inStock: true },
       ],
     };
 
@@ -18,8 +18,8 @@ describe("mapMenuResponseToFillerCandidates", () => {
   it("maps a categories-paginated shape into a flat FillerCandidate[]", () => {
     const raw = {
       categories: [
-        { items: [{ itemId: "item_1", price: 3500, inStock: true }] },
-        { items: [{ itemId: "item_2", price: 4500, inStock: true }] },
+        { items: [{ id: "item_1", price: 3500, inStock: true }] },
+        { items: [{ id: "item_2", price: 4500, inStock: true }] },
       ],
     };
 
@@ -29,7 +29,7 @@ describe("mapMenuResponseToFillerCandidates", () => {
 
   // §8 row 20 -- string-typed monetary values coerced to numbers.
   it("coerces a string-typed price into a number", () => {
-    const raw = { items: [{ itemId: "item_1", price: "3500", inStock: true }] };
+    const raw = { items: [{ id: "item_1", price: "3500", inStock: true }] };
     const candidates = mapMenuResponseToFillerCandidates(raw);
     expect(candidates[0].price).toBe(3500);
   });
@@ -38,8 +38,8 @@ describe("mapMenuResponseToFillerCandidates", () => {
   it("drops an item with a zero or negative price", () => {
     const raw = {
       items: [
-        { itemId: "bad", price: 0, inStock: true },
-        { itemId: "good", price: 100, inStock: true },
+        { id: "bad", price: 0, inStock: true },
+        { id: "good", price: 100, inStock: true },
       ],
     };
     const candidates = mapMenuResponseToFillerCandidates(raw);
@@ -50,8 +50,8 @@ describe("mapMenuResponseToFillerCandidates", () => {
   it("drops a single malformed menu item without aborting the rest", () => {
     const raw = {
       items: [
-        { itemId: "good", price: 100, inStock: true },
-        { price: 100 }, // malformed: missing itemId
+        { id: "good", price: 100, inStock: true },
+        { price: 100 }, // malformed: missing id
       ],
     };
     const candidates = mapMenuResponseToFillerCandidates(raw);

@@ -143,7 +143,11 @@ export class HackerAlgorithm {
     if (coupon.expiresAt && new Date(coupon.expiresAt) <= now) {
       return { eligible: false, reason: "expired" };
     }
-    if (!coupon.paymentModes.includes("online")) {
+    // Real Swiggy Food MCP is COD-only in v1 (online payment is a v2
+    // roadmap item) -- accept either mode so coupon application actually
+    // works against real Swiggy today, while staying forward-compatible
+    // once online payment ships.
+    if (!coupon.paymentModes.includes("online") && !coupon.paymentModes.includes("cod")) {
       return { eligible: false, reason: "payment mode mismatch" };
     }
     if (coupon.minOrderValue > baseTotal + affordableFillerBudget) {

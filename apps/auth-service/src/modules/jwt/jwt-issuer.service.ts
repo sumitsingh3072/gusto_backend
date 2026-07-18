@@ -1,10 +1,11 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import jwt from "jsonwebtoken";
-import { verifyJwt } from "@gusto/auth-middleware";
+import { randomUUID } from "node:crypto";
+import { verifyJwt, GustoJwtPayload } from "@gusto/auth-middleware";
 import { env } from "../../config/configuration";
 
-export interface GustoJwtPayload {
-  sub: string; // Gusto userId
+export interface VerifiedToken extends GustoJwtPayload {
+  exp: number; // epoch seconds -- needed by logout to size the blocklist TTL
 }
 
 /**
@@ -19,7 +20,7 @@ export interface GustoJwtPayload {
 @Injectable()
 export class JwtIssuerService {
   issue(userId: string): string {
-    const payload: GustoJwtPayload = { sub: userId };
+    const payload: GustoJwtPayload = { sub: userId, jti: randomUUID() };
     return jwt.sign(payload, env.JWT_SECRET, {
       expiresIn: env.JWT_EXPIRES_IN_SECONDS,
       algorithm: "HS256",
@@ -27,17 +28,25 @@ export class JwtIssuerService {
   }
 
   verify(token: string): GustoJwtPayload {
-    let decoded: string | jwt.JwtPayload;
     try {
-      decoded = verifyJwt(token, env.JWT_SECRET);
+      return verifyJwt(token, env.JWT_SECRET);
     } catch {
       throw new UnauthorizedException("Invalid or expired token");
     }
+  }
 
-    if (typeof decoded === "string" || typeof decoded.sub !== "string") {
+  // Used by POST /auth/logout -- needs `exp` too, to size the blocklist
+  // entry's TTL to exactly the token's remaining lifetime.
+  verifyWithExpiry(token: string): VerifiedToken {
+    let decoded: jwt.JwtPayload;
+    try {
+      decoded = jwt.verify(token, env.JWT_SECRET) as jwt.JwtPayload;
+    } catch {
+      throw new UnauthorizedException("Invalid or expired token");
+    }
+    if (typeof decoded.sub !== "string" || typeof decoded.jti !== "string" || typeof decoded.exp !== "number") {
       throw new UnauthorizedException("Malformed token payload");
     }
-
-    return { sub: decoded.sub };
+    return { sub: decoded.sub, jti: decoded.jti, exp: decoded.exp };
   }
 }

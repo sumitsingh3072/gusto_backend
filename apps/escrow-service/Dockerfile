@@ -13,6 +13,7 @@ RUN pnpm deploy --filter=escrow-service --prod /prod/escrow-service
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache openssl
 COPY --from=build /prod/escrow-service ./
 EXPOSE 3005
 CMD ["node", "dist/main.js"]

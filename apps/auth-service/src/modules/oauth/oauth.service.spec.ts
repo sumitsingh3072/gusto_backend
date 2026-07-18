@@ -5,6 +5,7 @@ import { TokenVaultService } from "../token-vault/token-vault.service";
 import { JwtIssuerService } from "../jwt/jwt-issuer.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { EventPublisher } from "@gusto/event-bus";
+import { TokenBlocklistService } from "@gusto/auth-middleware";
 
 jest.mock("axios");
 
@@ -41,6 +42,7 @@ describe("OAuthService", () => {
   let tokenVault: TokenVaultService;
   let jwtIssuer: JwtIssuerService;
   let eventPublisher: EventPublisher;
+  let tokenBlocklist: jest.Mocked<TokenBlocklistService>;
   let service: OAuthService;
 
   beforeEach(() => {
@@ -49,7 +51,8 @@ describe("OAuthService", () => {
     tokenVault = new TokenVaultService();
     jwtIssuer = new JwtIssuerService();
     eventPublisher = { publish: jest.fn().mockResolvedValue(undefined) } as unknown as EventPublisher;
-    service = new OAuthService(tokenVault, jwtIssuer, prisma as unknown as PrismaService, eventPublisher);
+    tokenBlocklist = { revoke: jest.fn().mockResolvedValue(undefined), isRevoked: jest.fn() } as unknown as jest.Mocked<TokenBlocklistService>;
+    service = new OAuthService(tokenVault, jwtIssuer, prisma as unknown as PrismaService, eventPublisher, tokenBlocklist);
   });
 
   describe("startPkceFlow", () => {
@@ -168,6 +171,25 @@ describe("OAuthService", () => {
       const result = await service.refresh({ userId: "user-1" });
 
       expect(result.status).toEqual("reauthentication_required");
+    });
+  });
+
+  describe("logout", () => {
+    it("revokes the token's jti with a TTL matching its remaining lifetime", async () => {
+      const token = jwtIssuer.issue("user-1");
+
+      await service.logout(token);
+
+      expect(tokenBlocklist.revoke).toHaveBeenCalledTimes(1);
+      const [jti, ttlSeconds] = tokenBlocklist.revoke.mock.calls[0];
+      expect(typeof jti).toBe("string");
+      expect(ttlSeconds).toBeGreaterThan(0);
+      expect(ttlSeconds).toBeLessThanOrEqual(43_200);
+    });
+
+    it("rejects a garbage token without calling revoke", async () => {
+      await expect(service.logout("not-a-real-jwt")).rejects.toThrow(UnauthorizedException);
+      expect(tokenBlocklist.revoke).not.toHaveBeenCalled();
     });
   });
 

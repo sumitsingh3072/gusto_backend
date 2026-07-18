@@ -21,12 +21,17 @@ export class FoodMcpClient {
   ) {}
 
   async callTool(tool: string, args: Record<string, unknown>, userId: string) {
-    // Cache-through for read-only Discover tools
-    const isCacheableDiscoverTool = ["search_restaurants", "search_menu", "get_restaurant_menu"].includes(tool);
+    // Cache-through for read-only Discover tools and get_food_cart. The key
+    // is always scoped by userId -- harmless for the Discover tools (menus/
+    // search results aren't user-specific, so this just means one cache
+    // entry per user instead of a shared one) but mandatory for
+    // get_food_cart, whose response IS user-specific: without userId in the
+    // key, two different users calling get_food_cart with identical
+    // arguments (e.g. the same addressId) would read each other's cart.
+    const isCacheableTool = ["search_restaurants", "search_menu", "get_restaurant_menu", "get_food_cart"].includes(tool);
     let cacheKey: string | null = null;
-    if (isCacheableDiscoverTool) {
-      const argsHash = createHash("sha256").update(JSON.stringify(args || {})).digest("hex");
-      cacheKey = `mcp:food:${tool}:${argsHash}`;
+    if (isCacheableTool) {
+      cacheKey = this.buildCacheKey(tool, userId, args);
       const cached = await this.cache.get<any>(cacheKey);
       if (cached) {
         return cached;
@@ -65,10 +70,14 @@ export class FoodMcpClient {
         // Swiggy docs: { success: true, data: {...} } or { success: false, error: {...} }
         // JSON-RPC level might also return error, but Swiggy MCP wraps it in result if success
         const result = response.data;
-        
-        if (isCacheableDiscoverTool && cacheKey && result && result.success) {
+
+        if (isCacheableTool && cacheKey && result && result.success) {
           // low-churn data cache for 5 mins
           await this.cache.set(cacheKey, result, 300);
+        }
+
+        if (result && result.success && (tool === "update_food_cart" || tool === "flush_food_cart")) {
+          await this.invalidateCartCache(tool, userId, args);
         }
 
         return result;
@@ -87,6 +96,32 @@ export class FoodMcpClient {
         await new Promise((r) => setTimeout(r, baseMs + jitterMs));
       }
     }
+  }
+
+  private buildCacheKey(tool: string, userId: string, args: Record<string, unknown>): string {
+    const argsHash = createHash("sha256").update(JSON.stringify(args || {})).digest("hex");
+    return `mcp:food:${tool}:${userId}:${argsHash}`;
+  }
+
+  // Bust the cached get_food_cart response after a successful cart
+  // mutation, so callers never read a stale cart for up to the cache's 5
+  // minute TTL (KNOWN_ISSUES.md item 14).
+  private async invalidateCartCache(tool: string, userId: string, args: Record<string, unknown>): Promise<void> {
+    if (tool === "update_food_cart" && typeof args.addressId === "string") {
+      // get_food_cart is called with {addressId} (restaurantName is an
+      // optional display hint per its own docs) -- compute the exact key
+      // for that shape and delete just it. Best-effort: if a caller passed
+      // restaurantName to get_food_cart, that variant's cache entry (a
+      // different hash) won't be targeted here and will simply expire on
+      // its own TTL.
+      const cartKey = this.buildCacheKey("get_food_cart", userId, { addressId: args.addressId });
+      await this.cache.del(cartKey);
+      return;
+    }
+    // flush_food_cart carries no arguments at all, so there's no addressId
+    // to target a single entry -- fall back to clearing every cached
+    // get_food_cart response for this user.
+    await this.cache.delByPrefix(`mcp:food:get_food_cart:${userId}:`);
   }
 
   private isRetryable(error: any, attempt: number): boolean {

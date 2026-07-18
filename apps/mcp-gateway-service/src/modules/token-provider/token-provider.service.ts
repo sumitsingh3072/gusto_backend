@@ -1,32 +1,37 @@
-import { Injectable, InternalServerErrorException } from "@nestjs/common";
+import { Inject, Injectable, InternalServerErrorException } from "@nestjs/common";
+import { Redis } from "ioredis";
 import axios from "axios";
 import { env } from "../../config/configuration";
+import { REDIS_CLIENT } from "../redis/redis.module";
+
+const CACHE_TTL_SECONDS = 30;
 
 @Injectable()
 export class TokenProviderService {
-  // Simple in-memory cache: userId -> { token, expiresAt }
-  private cache = new Map<string, { token: string; expiresAt: number }>();
-  private readonly CACHE_TTL_MS = 30 * 1000;
+  constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
   async getToken(userId: string): Promise<string> {
-    const cached = this.cache.get(userId);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.token;
+    const cacheKey = `mcp:token:${userId}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      return cached;
     }
 
     try {
       const response = await axios.post<{ token: string }>(
         `${env.AUTH_SERVICE_URL}/auth/internal/token`,
         { userId },
-        { headers: { "Content-Type": "application/json" } }
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "X-Internal-Secret": env.INTERNAL_SHARED_SECRET,
+          },
+        }
       );
 
       const token = response.data.token;
-      
-      this.cache.set(userId, {
-        token,
-        expiresAt: Date.now() + this.CACHE_TTL_MS,
-      });
+
+      await this.redis.setex(cacheKey, CACHE_TTL_SECONDS, token);
 
       return token;
     } catch (error) {

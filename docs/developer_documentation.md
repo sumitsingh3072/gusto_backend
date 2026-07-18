@@ -50,9 +50,10 @@ c:\gusto_backend
 │   ├── ai-agent-service/        # Python/FastAPI service for AI reasoning (stateless)
 │   ├── api-gateway/             # Public-facing NestJS entry point, routes requests, checks auth
 │   ├── auth-service/            # Handles OAuth2.1+PKCE, JWTs, and encrypted MCP credentials
-│   ├── coupon-optimization/     # Deterministic "Hacker" cart-optimization logic (stateless)
+│   ├── coupon-optimization-service/ # Deterministic "Hacker" cart-optimization logic (stateless)
 │   ├── escrow-service/          # Wallet, 30-day budget rollover, and savings ledger
 │   ├── mcp-gateway-service/     # Invokes Swiggy MCP servers, caches responses via Redis
+│   ├── mock-swiggy-service/     # Docs-faithful mock Swiggy Food MCP server (local/CI testing only)
 │   ├── notification-service/    # Outbound push notifications, SMS, email, and user decisions
 │   ├── orchestrator-service/    # Core state machine managing daily & 30-day workflows
 │   ├── order-execution-service/ # Final cart building, human-in-the-loop triggers, placement
@@ -97,6 +98,23 @@ All Node.js services are built with **NestJS** and use **TypeScript** unless spe
 | **notification-service** | Node.js / NestJS | PostgreSQL (`notification`) | Sends notifications and collects user interactive decisions. |
 | **mcp-gateway-service** | Node.js / NestJS | Redis (Cache) | Sole communicator with Swiggy API/MCP servers. |
 | **ai-agent-service** | Python / FastAPI | None | Runs the Scout agent utilizing LLM prompting. |
+| **mock-swiggy-service** | Node.js / Express | None | Docs-faithful stand-in for Swiggy's real Food MCP server, used for local/CI testing (not part of the production topology). See `prompting_docs/phase1-mock-swiggy-testing-results.md`. |
+
+### Default ports
+
+| Service | Port |
+| :--- | :--- |
+| api-gateway | 3000 |
+| auth-service | 3001 |
+| orchestrator-service | 3002 |
+| coupon-optimization-service | 3003 |
+| order-execution-service | 3004 |
+| escrow-service | 3005 |
+| scheduler-service | 3006 |
+| notification-service | 3007 |
+| mcp-gateway-service | 3008 |
+| ai-agent-service | 8001 |
+| mock-swiggy-service | 3010 |
 
 ---
 
@@ -114,8 +132,8 @@ Shared packages are declared as workspace dependencies in NestJS services (`pack
 ## 5. Development and Workflow Guide
 
 ### Prerequisites
-- Node.js (v18+)
-- `pnpm` (v9.7.0+)
+- Node.js (v20+ -- matches the `node:20-alpine` base every service's Dockerfile builds on)
+- `pnpm` (v9.7.0, pinned via `packageManager` in the root `package.json`)
 - Docker and Docker Compose
 
 ### Bootstrapping the Workspace
@@ -142,6 +160,13 @@ Start all apps and watchers in parallel:
 pnpm dev
 ```
 Turborepo handles the execution dependency graph, logging output of all microservices concurrently.
+
+Alternatively, `docker compose -f infra/docker/docker-compose.yml up -d --build` brings up
+all 10 app services plus Postgres/Redis/LocalStack as containers in one command --
+see `prompting_docs/phase3-dockerization-results.md` for what that covers. For a
+complete, copy-pasteable walkthrough from a clean clone (including seeding a test
+user and verifying the whole stack works), see
+`prompting_docs/getting-started-from-scratch.md`.
 
 ---
 

@@ -11,6 +11,9 @@ export const envSchema = baseEnvSchema.extend({
   AUTH_SERVICE_URL: z.string().url(),
   JWT_SECRET: z.string().min(16),
   CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:5173"),
+  // Backs the logout/revocation blocklist check on every guarded request --
+  // see KNOWN_ISSUES.md item 10.
+  REDIS_URL: z.string().url(),
 });
 
 export const env = envSchema.parse(process.env);

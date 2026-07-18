@@ -8,7 +8,7 @@ import { env } from "../../config/configuration";
   providers: [
     CohortScheduler,
     { provide: OrchestratorClient, useFactory: () => new OrchestratorClient(env.ORCHESTRATOR_SERVICE_URL) },
-    { provide: AuthClient, useFactory: () => new AuthClient(env.AUTH_SERVICE_URL) },
+    { provide: AuthClient, useFactory: () => new AuthClient(env.AUTH_SERVICE_URL, env.INTERNAL_SHARED_SECRET) },
   ],
 })
 export class CronModule {}

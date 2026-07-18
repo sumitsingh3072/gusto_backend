@@ -12,6 +12,7 @@ export const envSchema = baseEnvSchema.extend({
   ESCROW_SERVICE_URL: z.string().url(),
   MCP_GATEWAY_SERVICE_URL: z.string().url(),
   ORCHESTRATOR_USER_AUTHENTICATED_QUEUE_URL: z.string().url(),
+  INTERNAL_SHARED_SECRET: z.string().min(16, "INTERNAL_SHARED_SECRET must be at least 16 characters"),
 });
 
 export const env = envSchema.parse(process.env);

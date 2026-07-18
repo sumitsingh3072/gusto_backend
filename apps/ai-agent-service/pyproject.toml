@@ -2,7 +2,10 @@
 name = "ai-agent-service"
 version = "0.1.0"
 description = "Gusto's only AI/LLM component -- stateless Scout semantic-matching microservice"
-packages = [{ include = "src" }]
+# This is a deployed service, not a distributed package -- package-mode
+# disables Poetry's package-mode metadata requirements (e.g. `authors`),
+# which don't apply here.
+package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.11, <=3.13"

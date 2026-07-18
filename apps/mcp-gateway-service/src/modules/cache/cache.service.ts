@@ -20,4 +20,23 @@ export class CacheService {
     if (ttlSeconds <= 0) return;
     await this.redis.setex(key, ttlSeconds, JSON.stringify(value));
   }
+
+  async del(key: string): Promise<void> {
+    await this.redis.del(key);
+  }
+
+  // Non-blocking prefix delete via SCAN (never KEYS, which blocks Redis on
+  // large keyspaces) -- used when the specific cache key to bust isn't
+  // knowable from the triggering call's own arguments (e.g. flush_food_cart
+  // carries no addressId to target a single get_food_cart entry).
+  async delByPrefix(prefix: string): Promise<void> {
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await this.redis.scan(cursor, "MATCH", `${prefix}*`, "COUNT", 100);
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } while (cursor !== "0");
+  }
 }

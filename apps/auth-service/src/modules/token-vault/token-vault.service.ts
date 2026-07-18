@@ -28,10 +28,11 @@ export class TokenVaultService {
   }
 
   decrypt(encryptedToken: string): string {
-    const [ivB64, authTagB64, ciphertextB64] = encryptedToken.split(".");
-    if (!ivB64 || !authTagB64 || !ciphertextB64) {
+    const parts = encryptedToken.split(".");
+    if (parts.length !== 3) {
       throw new Error("Malformed encrypted token: expected 'iv.authTag.ciphertext'");
     }
+    const [ivB64, authTagB64, ciphertextB64] = parts;
 
     const iv = Buffer.from(ivB64, "base64");
     const authTag = Buffer.from(authTagB64, "base64");
