@@ -7,7 +7,7 @@ generator client {
   // defaults to on musl without this override) -- same fix applied to
   // order-execution-service after a real docker build+run reproduced the
   // failure.
-  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {

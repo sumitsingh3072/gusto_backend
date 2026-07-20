@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Post } from "@nestjs/common";
 import { z } from "zod";
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
 import { ScheduleConfigService } from "./schedule-config.service";
 
 // Local, internal-only schema -- no consumer wires this endpoint yet (same
@@ -12,11 +13,17 @@ const ScheduleConfigRequestSchema = z.object({
   timezone: z.string().min(1).default("Asia/Kolkata"),
 });
 
+@ApiTags("ScheduleConfig")
+@ApiBearerAuth()
 @Controller("schedule-config")
 export class ScheduleConfigController {
   constructor(private readonly scheduleConfig: ScheduleConfigService) {}
 
   @Post()
+  @ApiOperation({ summary: "Upsert schedule config", description: "Creates or updates the daily schedule configuration for a user (scout, notify, execute times and timezone)." })
+  @ApiResponse({ status: 200, description: "Schedule config upserted successfully" })
+  @ApiResponse({ status: 400, description: "Invalid request body" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
   upsert(@Body() body: unknown) {
     const parsed = ScheduleConfigRequestSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
