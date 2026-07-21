@@ -9,27 +9,31 @@
     "lint": "eslint \"src/**/*.ts\"",
     "test": "jest --passWithNoTests",
     "prisma:generate": "prisma generate --schema=./prisma/schema.prisma",
-    "prisma:migrate:dev": "prisma migrate dev --schema=./prisma/schema.prisma"
+    "prisma:migrate:dev": "dotenv -e ../../.env -- prisma migrate dev --schema=./prisma/schema.prisma"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.620.0",
+    "@aws-sdk/client-sns": "^3.620.0",
+    "@gusto/config": "workspace:*",
+    "@gusto/contracts": "workspace:*",
+    "@gusto/event-bus": "workspace:*",
+    "@gusto/logger": "workspace:*",
+    "@gusto/swagger": "workspace:*",
     "@nestjs/common": "^10.4.1",
     "@nestjs/core": "^10.4.1",
     "@nestjs/platform-express": "^10.4.1",
+    "@nestjs/swagger": "^11.4.6",
     "@prisma/client": "^5.18.0",
-    "@aws-sdk/client-sns": "^3.620.0",
-    "@aws-sdk/client-ses": "^3.620.0",
     "axios": "^1.7.4",
-    "@gusto/contracts": "workspace:*",
-    "@gusto/event-bus": "workspace:*",
-    "@gusto/config": "workspace:*",
-    "@gusto/logger": "workspace:*",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "prisma": "^5.18.0",
     "@gusto/tsconfig": "workspace:*",
+    "@types/jest": "^29.5.12",
     "jest": "^29.7.0",
-    "ts-jest": "^29.2.5",
-    "@types/jest": "^29.5.12"
+    "prisma": "^5.18.0",
+    "ts-jest": "^29.2.5"
   }
 }

@@ -30,7 +30,7 @@ services:
   mock-swiggy-service:
     build:
       context: ../..
-      dockerfile: apps/mock-swiggy-service/Dockerfile
+      dockerfile: mock-swiggy-service/Dockerfile
     environment:
       PORT: "3010"
     ports: ["3010:3010"]

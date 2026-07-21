@@ -1,4 +1,5 @@
 import { Body, Controller, Param, Post, Headers, HttpException, HttpStatus } from "@nestjs/common";
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from "@nestjs/swagger";
 import { FoodMcpClient } from "./food-mcp.client";
 
 /**
@@ -8,11 +9,18 @@ import { FoodMcpClient } from "./food-mcp.client";
  * place_food_order, track_food_order, get_food_order_details, get_food_orders,
  * get_addresses, flush_food_cart, get_food_cart, report_error).
  */
+@ApiTags("MCP Gateway - Food")
+@ApiBearerAuth()
 @Controller("mcp/food")
 export class FoodMcpController {
   constructor(private readonly client: FoodMcpClient) {}
 
   @Post(":tool")
+  @ApiOperation({ summary: "Call Food MCP tool", description: "Proxies a call to one of the 14 Swiggy Food MCP tools. The tool name is specified in the URL path." })
+  @ApiParam({ name: "tool", description: "The Food MCP tool name (e.g. search_restaurants, place_food_order, track_food_order)" })
+  @ApiResponse({ status: 200, description: "Tool executed successfully" })
+  @ApiResponse({ status: 400, description: "Bad request — missing x-user-id header or invalid input" })
+  @ApiResponse({ status: 503, description: "Service unavailable" })
   call(
     @Param("tool") tool: string, 
     @Body() input: Record<string, unknown>,

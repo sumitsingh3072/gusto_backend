@@ -1,4 +1,5 @@
 import { Body, Controller, HttpException, Post, ServiceUnavailableException } from "@nestjs/common";
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
 import axios from "axios";
 import { OrchestratorClient } from "../../clients/orchestrator.client";
 
@@ -7,11 +8,17 @@ import { OrchestratorClient } from "../../clients/orchestrator.client";
  * confirmation, forwarded to orchestrator-service (decisions) or
  * order-execution-service (confirmations) respectively.
  */
+@ApiTags("Notification - Decision Webhook")
+@ApiBearerAuth()
 @Controller("notify")
 export class DecisionWebhookController {
   constructor(private readonly orchestrator: OrchestratorClient) {}
 
   @Post("decision")
+  @ApiOperation({ summary: "Forward user decision", description: "Forwards an APPROVE/SWAP/SKIP decision from the user to orchestrator-service." })
+  @ApiResponse({ status: 200, description: "Decision forwarded successfully" })
+  @ApiResponse({ status: 400, description: "Bad request — invalid decision payload" })
+  @ApiResponse({ status: 503, description: "Service unavailable — orchestrator-service unreachable" })
   async forwardDecision(@Body() body: { userId: string; decision: "APPROVE" | "SWAP" | "SKIP" }) {
     try {
       return await this.orchestrator.submitDecision(body.userId, body.decision);
